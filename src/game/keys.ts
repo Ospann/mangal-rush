@@ -35,6 +35,7 @@ export const Tex = {
   Star: 'star',
   GuestBody: 'guest-body-',
   Face: 'face-',
+  Finger: 'finger',
 } as const;
 
 export const Sfx = {

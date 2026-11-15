@@ -20,7 +20,12 @@ export class GuestView {
   private emotion: Emotion = 'waiting';
   private clock = 0;
   private leaving = false;
-  private offsetY = 130;
+  private offsetX = 0;
+  private offsetY = 0;
+  private walking = true;
+  private eager = false;
+  private sweatSec = 0;
+  private readonly side: -1 | 1;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -28,8 +33,11 @@ export class GuestView {
     readonly x: number,
   ) {
     this.guestId = guest.id;
+    this.side = x < layout.width / 2 ? -1 : 1;
+    this.offsetX = this.offscreenX();
+    this.clock = Math.random() * 10;
 
-    this.body = scene.add.container(x, layout.guestY + this.offsetY).setDepth(Depth.Guests);
+    this.body = scene.add.container(x + this.offsetX, layout.guestY).setDepth(Depth.Guests);
     this.face = new Phaser.GameObjects.Image(scene, 0, HEAD_Y + 8, `${Tex.Face}waiting`);
     this.body.add([new Phaser.GameObjects.Image(scene, 0, 0, lookTexture(guest.look)), this.face]);
     if (guest.regular) {
@@ -39,7 +47,17 @@ export class GuestView {
           .setTint(0xffd447),
       );
     }
-    scene.tweens.add({ targets: this, offsetY: 0, duration: 380, ease: 'Back.easeOut' });
+    const walkMs = Math.abs(this.offsetX) * 2.1;
+    scene.tweens.add({
+      targets: this,
+      offsetX: 0,
+      duration: walkMs,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.walking = false;
+        this.squash();
+      },
+    });
 
     this.bubble = scene.add.container(x, layout.bubbleY).setDepth(Depth.GuestUi).setScale(0);
     this.content = new Phaser.GameObjects.Container(scene, 0, 0);
@@ -49,7 +67,7 @@ export class GuestView {
       targets: this.bubble,
       scale: 1,
       duration: 260,
-      delay: 260,
+      delay: walkMs + 80,
       ease: 'Back.easeOut',
     });
 
@@ -59,13 +77,34 @@ export class GuestView {
   update(guest: Guest, dtSec: number): void {
     this.clock += dtSec;
     const fraction = guest.patienceLeft / guest.patienceSec;
-    if (guest.state === 'waiting') this.setEmotion(fraction < 0.35 ? 'hurry' : 'waiting');
+    if (guest.state === 'waiting') {
+      const mood = fraction < 0.35 ? 'hurry' : 'waiting';
+      this.setEmotion(this.eager && mood === 'waiting' ? 'happy' : mood);
+    }
     this.fill(guest);
 
-    const hurry = this.emotion === 'hurry';
-    const bob = Math.sin(this.clock * (hurry ? 9 : 2.4)) * (hurry ? 3 : 4);
+    const hurry = this.emotion === 'hurry' && !this.leaving;
+    const bob = this.walking
+      ? -Math.abs(Math.sin(this.clock * 11)) * 12
+      : Math.sin(this.clock * (hurry ? 9 : 2.4)) * (hurry ? 3 : 4);
     const sway = hurry ? Math.sin(this.clock * 13) * 2 : 0;
-    this.body.setPosition(this.x + sway, layout.guestY + this.offsetY + bob);
+    const tilt = this.walking ? Math.sin(this.clock * 11) * 3 : this.eager ? -this.side * 4 : 0;
+    this.body.setPosition(this.x + this.offsetX + sway, layout.guestY + this.offsetY + bob);
+    this.body.setAngle(Phaser.Math.Linear(this.body.angle, tilt, Math.min(1, dtSec * 10)));
+    if (!this.walking && !this.leaving) {
+      const breath = 1 + Math.sin(this.clock * 2.4 + 1) * 0.012;
+      const target = this.eager ? 1.07 : 1;
+      const scale = Phaser.Math.Linear(this.body.scaleX, target, Math.min(1, dtSec * 12));
+      this.body.setScale(scale, scale * breath);
+    }
+
+    if (hurry && guest.state === 'waiting') {
+      this.sweatSec -= dtSec;
+      if (this.sweatSec <= 0) {
+        this.sweatSec = 1.1;
+        this.sweat();
+      }
+    }
 
     this.bar.clear();
     if (guest.state !== 'waiting') return;
@@ -77,6 +116,10 @@ export class GuestView {
     const blink = fraction < 0.2 ? 0.6 + 0.4 * Math.sin(this.clock * 16) : 1;
     this.bar.fillStyle(color, blink);
     this.bar.fillRoundedRect(left, top, Math.max(BAR_H, BAR_W * fraction), BAR_H, 7);
+  }
+
+  setEager(eager: boolean): void {
+    this.eager = eager && !this.leaving;
   }
 
   shake(): void {
@@ -93,18 +136,49 @@ export class GuestView {
   leave(happy: boolean): void {
     if (this.leaving) return;
     this.leaving = true;
+    this.eager = false;
     this.setEmotion(happy ? 'happy' : 'angry');
     this.bar.clear();
+    this.body.setScale(1);
     this.scene.tweens.add({ targets: this.bubble, scale: 0, duration: 160, ease: 'Back.easeIn' });
     if (happy) {
-      this.scene.tweens.add({ targets: this, offsetY: -26, duration: 150, yoyo: true, repeat: 1 });
+      this.scene.tweens.add({
+        targets: this,
+        offsetY: -30,
+        duration: 140,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Quad.easeOut',
+      });
+      this.heart();
+    } else {
+      this.body.each((child: Phaser.GameObjects.GameObject) => {
+        if (child instanceof Phaser.GameObjects.Image) child.setTint(0xff9c8a);
+      });
+      this.scene.tweens.add({
+        targets: this,
+        offsetX: { from: -8, to: 8 },
+        duration: 50,
+        yoyo: true,
+        repeat: 3,
+        onComplete: () => {
+          this.offsetX = 0;
+          this.body.each((child: Phaser.GameObjects.GameObject) => {
+            if (child instanceof Phaser.GameObjects.Image && child !== this.face) child.clearTint();
+          });
+        },
+      });
+      this.steam();
     }
     this.scene.tweens.add({
       targets: this,
-      offsetY: 190,
-      duration: 380,
-      delay: 720,
-      ease: 'Cubic.easeIn',
+      offsetX: this.offscreenX(),
+      duration: happy ? 560 : 460,
+      delay: happy ? 560 : 420,
+      ease: 'Quad.easeIn',
+      onStart: () => {
+        this.walking = true;
+      },
     });
   }
 
@@ -114,6 +188,72 @@ export class GuestView {
     this.body.destroy();
     this.bubble.destroy();
     this.bar.destroy();
+  }
+
+  private offscreenX(): number {
+    return this.side < 0 ? -(this.x + 120) : layout.width - this.x + 120;
+  }
+
+  private squash(): void {
+    this.body.setScale(1.1);
+  }
+
+  private sweat(): void {
+    const drop = this.scene.add
+      .image(this.body.x + 40 * this.side, this.body.y + HEAD_Y - 18, Tex.Drop)
+      .setTint(0xaee4ff)
+      .setScale(0.9)
+      .setDepth(Depth.GuestUi);
+    this.scene.tweens.add({
+      targets: drop,
+      y: drop.y + 34,
+      alpha: 0,
+      duration: 700,
+      ease: 'Quad.easeIn',
+      onComplete: () => drop.destroy(),
+    });
+  }
+
+  private heart(): void {
+    for (let index = 0; index < 3; index += 1) {
+      const star = this.scene.add
+        .image(this.body.x + (index - 1) * 36, this.body.y + HEAD_Y - 40, Tex.Sparkle)
+        .setTint(0xffd447)
+        .setScale(0)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(Depth.GuestUi);
+      this.scene.tweens.add({
+        targets: star,
+        scale: 0.7,
+        y: star.y - 60,
+        alpha: { from: 1, to: 0 },
+        duration: 700,
+        delay: index * 90,
+        ease: 'Quad.easeOut',
+        onComplete: () => star.destroy(),
+      });
+    }
+  }
+
+  private steam(): void {
+    for (let index = 0; index < 4; index += 1) {
+      const puff = this.scene.add
+        .image(this.body.x + (index % 2 === 0 ? -46 : 46), this.body.y + HEAD_Y - 30, Tex.Puff)
+        .setTint(0xff8a7a)
+        .setAlpha(0.8)
+        .setScale(0.4)
+        .setDepth(Depth.GuestUi);
+      this.scene.tweens.add({
+        targets: puff,
+        y: puff.y - 70,
+        x: puff.x + (index % 2 === 0 ? -20 : 20),
+        scale: 1.1,
+        alpha: 0,
+        duration: 650,
+        delay: index * 110,
+        onComplete: () => puff.destroy(),
+      });
+    }
   }
 
   private fill(guest: Guest): void {

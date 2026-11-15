@@ -8,7 +8,6 @@
   "menu.language": "Language: {language}",
   "pause.title": "Paused",
   "pause.resume": "Continue",
-  "day.hint": "Drag a skewer onto the grill · tap to flip · swipe the coals to fan · tap a flame to splash it · tap sides and drinks · drag the plate to a guest",
   "day.coals": "Add coals",
   "day.coals.wait": "Coals: {seconds}s",
   "day.combo": "Combo ×{count}",
@@ -174,5 +173,14 @@
   "result.doubled": "Earnings doubled: +{amount}",
   "select.helper": "Helper for a day ▶",
   "select.helper.ready": "Helper joins the next day",
-  "pause.finish": "End the feast"
+  "pause.finish": "End the feast",
+  "tutorial.place": "Drag a raw skewer from the tray onto the grill",
+  "tutorial.flip": "The bottom is browned — tap the skewer to flip it",
+  "tutorial.take": "Cooked on both sides — drag it to the plate. Golden is best!",
+  "tutorial.serve": "Drag the plate to the guest waiting for this order",
+  "tutorial.fan": "Need more heat? Swipe across the coals to fan them",
+  "tutorial.coals": "Heat running low? Add coals — it gets smoky for a few seconds",
+  "tutorial.side": "Tap a side dish to put it on the plate",
+  "tutorial.splash": "Flare-up! Tap the fire to splash it with water",
+  "tutorial.trash": "Burnt! Drag it to the bucket — no guest will take it"
 }

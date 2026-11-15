@@ -9,6 +9,7 @@ import { services } from '../services';
 import { Button } from '../ui/button';
 import { goalText } from '../ui/goal-text';
 import { addLabel } from '../ui/text';
+import { fadeIn, switchScene } from '../ui/transition';
 import type { DaySceneData } from './day';
 import type { UpgradesSceneData } from './upgrades';
 
@@ -39,6 +40,7 @@ export class DaySelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    fadeIn(this);
     const { i18n, save } = services();
     const { width, height } = this.scale;
     const cx = width / 2;
@@ -104,7 +106,7 @@ export class DaySelectScene extends Phaser.Scene {
           x,
           y,
           i18n.t('select.day', { day: day.day }),
-          () => this.scene.start(SceneKey.Day, { dayId: day.id } satisfies DaySceneData),
+          () => switchScene(this, SceneKey.Day, { dayId: day.id } satisfies DaySceneData),
           {
             width: 310,
             height: 122,
@@ -157,7 +159,7 @@ export class DaySelectScene extends Phaser.Scene {
       height - 190,
       i18n.t('select.upgrades'),
       () =>
-        this.scene.start(SceneKey.Upgrades, {
+        switchScene(this, SceneKey.Upgrades, {
           location: this.location,
         } satisfies UpgradesSceneData),
       { color: ui.primary, height: 96 },
@@ -168,7 +170,7 @@ export class DaySelectScene extends Phaser.Scene {
       cx,
       height - 78,
       i18n.t('select.back'),
-      () => this.scene.start(SceneKey.Menu),
+      () => switchScene(this, SceneKey.Menu),
       {
         color: ui.secondary,
         height: 90,
@@ -182,7 +184,7 @@ export class DaySelectScene extends Phaser.Scene {
       x,
       y,
       label,
-      () => this.scene.start(SceneKey.DaySelect, { location: target } satisfies DaySelectData),
+      () => switchScene(this, SceneKey.DaySelect, { location: target } satisfies DaySelectData),
       { width: 84, height: 84, fontSize: 40, color: ui.secondary },
     );
   }

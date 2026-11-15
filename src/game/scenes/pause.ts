@@ -22,7 +22,12 @@ export class PauseScene extends Phaser.Scene {
     const { i18n } = services();
     const { width, height } = this.scale;
 
-    this.add.rectangle(0, 0, width, height, 0x000000, 0.65).setOrigin(0).setInteractive();
+    const shade = this.add
+      .rectangle(0, 0, width, height, 0x000000, 0.65)
+      .setOrigin(0)
+      .setInteractive();
+    shade.setAlpha(0);
+    this.tweens.add({ targets: shade, alpha: 1, duration: 160 });
     addLabel(this, width / 2, height * 0.4, i18n.t('pause.title'), 80);
     Button.create(
       this,

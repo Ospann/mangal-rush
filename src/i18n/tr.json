@@ -8,7 +8,6 @@
   "menu.language": "Dil: {language}",
   "pause.title": "Duraklatıldı",
   "pause.resume": "Devam et",
-  "day.hint": "Şişi mangala sürükle · çevirmek için dokun · körüklemek için közü kaydır · alevi söndürmek için dokun · garnitür ve içeceklere dokun · tabağı misafire sürükle",
   "day.coals": "Kömür ekle",
   "day.coals.wait": "Kömür: {seconds} sn",
   "day.combo": "Kombo ×{count}",
@@ -174,5 +173,14 @@
   "result.doubled": "Kazanç ikiye katlandı: +{amount}",
   "select.helper": "Bir günlük yardımcı ▶",
   "select.helper.ready": "Yardımcı sonraki gün gelecek",
-  "pause.finish": "Şöleni bitir"
+  "pause.finish": "Şöleni bitir",
+  "tutorial.place": "Çiğ şişi tepsiden mangala sürükle",
+  "tutorial.flip": "Alt taraf kızardı — çevirmek için şişe dokun",
+  "tutorial.take": "İki tarafı da pişti — tabağa sürükle. Altın renk en iyisi!",
+  "tutorial.serve": "Tabağı bu siparişi bekleyen misafire sürükle",
+  "tutorial.fan": "Daha çok ateş mi lazım? Közün üzerinde kaydırıp körükle",
+  "tutorial.coals": "Ateş azaldı mı? Kömür ekle — birkaç saniye duman olur",
+  "tutorial.side": "Garnitüre dokun, tabağa koyulsun",
+  "tutorial.splash": "Alev! Su serpmek için ateşe dokun",
+  "tutorial.trash": "Yandı! Kovaya sürükle — kimse bunu almaz"
 }

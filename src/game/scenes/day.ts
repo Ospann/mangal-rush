@@ -26,10 +26,14 @@ import { baseMods, modsFor, withBuzz } from '../locations';
 import { applyOutcome, evaluateDay } from '../progress';
 import { regulars } from '../regulars';
 import { DaySim, type Guest } from '../sim/day-sim';
+import type { GrillSlot } from '../sim/grill';
+import { qualityOf, sideStage } from '../sim/skewer';
 import { services } from '../services';
+import { Tutorial, type TutorialSignal, type TutorialStep } from '../tutorial';
 import { Button } from '../ui/button';
 import { goalShortText, goalText } from '../ui/goal-text';
 import { addLabel } from '../ui/text';
+import { fadeIn, switchScene } from '../ui/transition';
 import { Depth, Fx } from '../view/fx';
 import { GrillView } from '../view/grill-view';
 import { GuestView } from '../view/guest-view';
@@ -46,10 +50,12 @@ import {
   slotAt,
   slotWidth,
   slotX,
+  trayX,
 } from '../view/layout';
 import { PlateView } from '../view/plate-view';
 import { SkewerSprite } from '../view/skewer-sprite';
 import { StationsView } from '../view/stations-view';
+import { TutorialView, type TutorialGesture } from '../view/tutorial-view';
 import type { DayResultData } from './day-result';
 import { REGISTRY_HELPER_PASS, REGISTRY_LOCATION } from './day-select';
 import { pauseGame, QUIT_EVENT, REGISTRY_DAY } from './pause';
@@ -80,6 +86,16 @@ type DropTarget =
   | { kind: 'bucket' }
   | null;
 
+const TUTORIAL_DELAY_SEC = 2.8;
+type TutorialHint = TutorialStep | 'trash';
+const tutorialLower: ReadonlySet<TutorialHint> = new Set([
+  'place',
+  'take',
+  'serve',
+  'side',
+  'trash',
+]);
+
 function formatTime(seconds: number): string {
   const whole = Math.ceil(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
@@ -107,7 +123,9 @@ export class DayScene extends Phaser.Scene {
   private toastY = 0;
   private shownEvent = '';
   private shownGoal = '';
-  private helpText: Phaser.GameObjects.Text | null = null;
+  private tutorial: Tutorial | null = null;
+  private tutorialView: TutorialView | null = null;
+  private tutorialWait = 0;
   private coalsButton!: Button;
   private coalsLabel = '';
   private shownMoney = 0;
@@ -129,6 +147,7 @@ export class DayScene extends Phaser.Scene {
   }
 
   create(): void {
+    fadeIn(this);
     const { platform, gameplay } = services();
     const { save } = services();
     this.toy = this.dayId === TOY_DAY_ID;
@@ -223,11 +242,10 @@ export class DayScene extends Phaser.Scene {
 
     this.updateSizzle(dtSec);
     this.updateHud(dtSec);
+    this.updateTutorial(dtSec);
   }
 
   private buildWorld(): void {
-    const { i18n } = services();
-
     this.add.image(0, 0, Tex.Background).setOrigin(0).setDepth(Depth.Background);
     this.add.image(0, layout.counterY, Tex.Counter).setOrigin(0).setDepth(Depth.Counter);
 
@@ -245,21 +263,11 @@ export class DayScene extends Phaser.Scene {
 
     this.hint = this.add.graphics().setDepth(Depth.Hint);
 
-    this.helpText = null;
-    const { day, location } = this.sim.level;
-    if (this.toy || day > 1 || (day === 1 && location !== 'roadside')) return;
-    this.helpText = addLabel(
-      this,
-      layout.width / 2,
-      layout.skewerY,
-      i18n.t('day.hint'),
-      30,
-      ui.text,
-    )
-      .setDepth(Depth.Hint)
-      .setWordWrapWidth(560)
-      .setStroke('#2a1b14', 8)
-      .setLineSpacing(8);
+    const { id, day, location } = this.sim.level;
+    const stars = services().save.data.stars[id] ?? 0;
+    this.tutorial = this.toy ? null : Tutorial.forDay(location, day, stars);
+    this.tutorialView = this.tutorial ? new TutorialView(this) : null;
+    this.tutorialWait = TUTORIAL_DELAY_SEC;
   }
 
   private toast(text: string): void {
@@ -401,10 +409,7 @@ export class DayScene extends Phaser.Scene {
     const slots = this.sim.slotCount;
     const meatMid = (layout.meatTop + layout.meatBottom) / 2;
 
-    events.on('placed', () => {
-      this.sfx.play(Sfx.Place, 0.7);
-      this.dismissHelp();
-    });
+    events.on('placed', () => this.sfx.play(Sfx.Place, 0.7));
 
     events.on('flipped', ({ slot }) => {
       this.sfx.play(Sfx.Flip, 0.6, Phaser.Math.FloatBetween(0.92, 1.1));
@@ -644,6 +649,19 @@ export class DayScene extends Phaser.Scene {
     });
 
     events.on('finished', () => this.finish());
+
+    const teach = (signal: TutorialSignal) => (): void => {
+      this.tutorial?.signal(signal);
+    };
+    events.on('placed', teach('placed'));
+    events.on('flipped', teach('flipped'));
+    events.on('taken', teach('taken'));
+    events.on('served', teach('served'));
+    events.on('fanned', teach('fanned'));
+    events.on('coalsAdded', teach('coalsAdded'));
+    events.on('sideAdded', teach('sideAdded'));
+    events.on('flare', teach('flare'));
+    events.on('flareOut', teach('flareOut'));
   }
 
   private bindInput(): void {
@@ -891,7 +909,7 @@ export class DayScene extends Phaser.Scene {
     const gesture = this.gestures.get(pointer.id);
     if (!gesture) return;
     this.gestures.delete(pointer.id);
-    this.hint.clear();
+    this.drawHint(null);
     const { x, y } = pointer;
 
     if (gesture.kind === 'skewer') {
@@ -953,7 +971,7 @@ export class DayScene extends Phaser.Scene {
       }
     }
     this.gestures.clear();
-    this.hint.clear();
+    this.drawHint(null);
   }
 
   private nearBucket(x: number, y: number): boolean {
@@ -1020,6 +1038,10 @@ export class DayScene extends Phaser.Scene {
   private drawHint(target: DropTarget): void {
     const g = this.hint;
     g.clear();
+    const eagerSeat = target?.kind === 'seat' ? target.seat : -1;
+    this.sim.seats.forEach((guest, seat) => {
+      if (guest) this.guestViews.get(guest.id)?.setEager(seat === eagerSeat);
+    });
     if (!target) return;
     g.lineStyle(6, 0xfff06a, 0.9);
     g.fillStyle(0xfff06a, 0.16);
@@ -1104,11 +1126,138 @@ export class DayScene extends Phaser.Scene {
     }
   }
 
-  private dismissHelp(): void {
-    const help = this.helpText;
-    if (!help) return;
-    this.helpText = null;
-    this.tweens.add({ targets: help, alpha: 0, duration: 400, onComplete: () => help.destroy() });
+  private updateTutorial(dtSec: number): void {
+    const view = this.tutorialView;
+    if (!view || !this.tutorial) return;
+    const step = this.tutorial.step;
+    if (step === null || this.leaving) {
+      view.hide();
+      this.tutorialView = null;
+      return;
+    }
+    if (this.tutorialWait > 0) {
+      this.tutorialWait -= dtSec;
+      return;
+    }
+    if (this.frozen) {
+      view.point(null);
+      return;
+    }
+    const hint = this.tutorialHint(step);
+    const y = tutorialLower.has(hint) ? layout.tutorialLowerY : layout.tutorialUpperY;
+    view.show(services().i18n.t(`tutorial.${hint}`), y);
+    view.point(this.tutorialGesture(hint));
+  }
+
+  private tutorialHint(step: TutorialStep): TutorialHint {
+    if (step !== 'take' && step !== 'serve') return step;
+    const burnt = this.burntSlot() !== null || this.burntPlate() >= 0;
+    if (burnt) return 'trash';
+    if (step === 'serve' && this.sim.plates.every((plate) => plate.skewers.length === 0)) {
+      return 'take';
+    }
+    return step;
+  }
+
+  private burntSlot(): number | null {
+    for (let index = 0; index < this.sim.slotCount; index += 1) {
+      const state = this.sim.grill.slot(index);
+      if (state?.skewer && !state.lifted && qualityOf(state.skewer) === 'burnt') return index;
+    }
+    return null;
+  }
+
+  private burntPlate(): number {
+    return this.sim.plates.findIndex((plate) =>
+      plate.skewers.some((skewer) => qualityOf(skewer) === 'burnt'),
+    );
+  }
+
+  private tutorialGesture(step: TutorialHint): TutorialGesture | null {
+    const sim = this.sim;
+    const slots = sim.slotCount;
+    const findSlot = (test: (index: number) => boolean): number | null => {
+      for (let index = 0; index < slots; index += 1) if (test(index)) return index;
+      return null;
+    };
+    const skewerSlot = (test: (state: GrillSlot) => boolean): number | null =>
+      findSlot((index) => {
+        const state = sim.grill.slot(index);
+        return state !== null && state.skewer !== null && !state.lifted && test(state);
+      });
+    const plateAt = (index: number): { x: number; y: number } => ({
+      x: plateX(index, sim.plates.length),
+      y: layout.plateY,
+    });
+
+    const bucket = { x: layout.bucketX, y: layout.bucketY };
+
+    if (step === 'trash') {
+      const slot = this.burntSlot();
+      if (slot !== null) {
+        return { kind: 'drag', from: { x: slotX(slot, slots), y: layout.skewerY }, to: bucket };
+      }
+      const plate = this.burntPlate();
+      return plate < 0 ? null : { kind: 'drag', from: plateAt(plate), to: bucket };
+    }
+    if (step === 'place') {
+      const slot = this.freeSlotNear(slotX(Math.floor(slots / 2), slots), null);
+      const meats = sim.level.meats.length;
+      if (slot === null || meats === 0) return null;
+      return {
+        kind: 'drag',
+        from: { x: trayX(0, meats), y: layout.trayY },
+        to: { x: slotX(slot, slots), y: layout.skewerY },
+      };
+    }
+    if (step === 'flip') {
+      const slot = skewerSlot(({ skewer }) => {
+        if (!skewer) return false;
+        const up = skewer.down === 0 ? 1 : 0;
+        return sideStage(skewer, skewer.down) !== 'raw' && sideStage(skewer, up) === 'raw';
+      });
+      return slot === null
+        ? null
+        : { kind: 'tap', at: { x: slotX(slot, slots), y: layout.skewerY } };
+    }
+    if (step === 'take') {
+      const slot = skewerSlot(({ skewer }) => skewer !== null && qualityOf(skewer) !== 'raw');
+      if (slot === null) return null;
+      return {
+        kind: 'drag',
+        from: { x: slotX(slot, slots), y: layout.skewerY },
+        to: plateAt(sim.activePlate),
+      };
+    }
+    if (step === 'serve') {
+      const plate = sim.plates.findIndex((entry) => entry.skewers.length > 0);
+      const seat = sim.seats.findIndex((guest) => guest?.state === 'waiting');
+      if (plate < 0 || seat < 0) return null;
+      return {
+        kind: 'drag',
+        from: plateAt(plate),
+        to: { x: seatX(seat, sim.level.seats), y: layout.guestY },
+      };
+    }
+    if (step === 'fan') {
+      const y = (layout.stripTop + layout.stripBottom) / 2;
+      return {
+        kind: 'swipe',
+        from: { x: layout.slotsLeft + 90, y },
+        to: { x: layout.slotsRight - 90, y },
+      };
+    }
+    if (step === 'coals') {
+      if (!sim.grill.coals.canAdd) return null;
+      return { kind: 'tap', at: { x: this.coalsButton.x, y: this.coalsButton.y } };
+    }
+    if (step === 'side') {
+      const side = sim.level.sides[0];
+      if (side === undefined) return null;
+      return { kind: 'tap', at: { x: this.stations.xOf(side), y: layout.stationY } };
+    }
+    const slot = skewerSlot((state) => state.flare);
+    return slot === null ? null : { kind: 'tap', at: { x: slotX(slot, slots), y: layout.skewerY } };
   }
 
   private finish(): void {
@@ -1137,7 +1286,7 @@ export class DayScene extends Phaser.Scene {
         stats: { ...this.sim.stats },
         toy: { best: Math.max(best, score), record: score > best, timeSec: this.sim.timeSec },
       };
-      this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, toyResult));
+      this.time.delayedCall(700, () => switchScene(this, SceneKey.DayResult, toyResult));
       return;
     }
 
@@ -1167,6 +1316,6 @@ export class DayScene extends Phaser.Scene {
       stats: { ...this.sim.stats },
       toy: null,
     };
-    this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, result));
+    this.time.delayedCall(700, () => switchScene(this, SceneKey.DayResult, result));
   }
 }

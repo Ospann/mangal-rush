@@ -9,6 +9,7 @@ import { services } from '../services';
 import { Button } from '../ui/button';
 import { dailyText } from '../ui/daily-text';
 import { addLabel } from '../ui/text';
+import { fadeIn, switchScene } from '../ui/transition';
 import { layout } from '../view/layout';
 import { SkewerSprite } from '../view/skewer-sprite';
 import type { DaySceneData } from './day';
@@ -19,6 +20,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    fadeIn(this);
     const { i18n, save, mute } = services();
     const { width, height } = this.scale;
     const cx = width / 2;
@@ -26,6 +28,18 @@ export class MenuScene extends Phaser.Scene {
     this.add.image(0, 0, Tex.Background).setOrigin(0);
     this.add.image(layout.grillX, layout.grillTop, Tex.Grill).setOrigin(0);
     this.add.rectangle(0, 0, width, height, 0x2a1b14, 0.55).setOrigin(0);
+    this.add.particles(0, 0, Tex.Spark, {
+      x: { min: layout.grillX + 40, max: width - layout.grillX - 40 },
+      y: height + 10,
+      lifespan: { min: 2600, max: 4200 },
+      speedY: { min: -200, max: -90 },
+      speedX: { min: -30, max: 30 },
+      scale: { start: 0.7, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      tint: [0xffd060, 0xff8a2a, 0xffb347],
+      blendMode: Phaser.BlendModes.ADD,
+      frequency: 140,
+    });
 
     const skewer = new SkewerSprite(this, 'lamb');
     skewer.paint(1.45, 1.45);
@@ -66,7 +80,7 @@ export class MenuScene extends Phaser.Scene {
       height * 0.47,
       '',
       () => {
-        this.scene.start(SceneKey.DaySelect);
+        switchScene(this, SceneKey.DaySelect);
       },
       { color: ui.primary },
     );
@@ -77,7 +91,7 @@ export class MenuScene extends Phaser.Scene {
       height * 0.57,
       '',
       () => {
-        this.scene.start(SceneKey.Day, { dayId: TOY_DAY_ID } satisfies DaySceneData);
+        switchScene(this, SceneKey.Day, { dayId: TOY_DAY_ID } satisfies DaySceneData);
       },
       { color: ui.green, fontSize: toyOpen ? 44 : 30 },
     );

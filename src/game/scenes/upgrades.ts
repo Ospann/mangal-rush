@@ -12,6 +12,7 @@ import { buyUpgrade, locationLevels } from '../progress';
 import { services } from '../services';
 import { Button } from '../ui/button';
 import { addLabel } from '../ui/text';
+import { fadeIn, switchScene } from '../ui/transition';
 import type { DaySelectData } from './day-select';
 
 export interface UpgradesSceneData {
@@ -32,6 +33,7 @@ export class UpgradesScene extends Phaser.Scene {
   }
 
   create(): void {
+    fadeIn(this);
     const { i18n, save } = services();
     const { width, height } = this.scale;
     const cx = width / 2;
@@ -98,7 +100,7 @@ export class UpgradesScene extends Phaser.Scene {
       height - 70,
       i18n.t('upgrades.back'),
       () =>
-        this.scene.start(SceneKey.DaySelect, { location: this.location } satisfies DaySelectData),
+        switchScene(this, SceneKey.DaySelect, { location: this.location } satisfies DaySelectData),
       { color: ui.secondary, height: 86 },
     );
   }

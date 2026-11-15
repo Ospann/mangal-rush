@@ -8,6 +8,7 @@ import { services } from '../services';
 import { Button } from '../ui/button';
 import { goalText } from '../ui/goal-text';
 import { addLabel } from '../ui/text';
+import { fadeIn, switchScene } from '../ui/transition';
 import type { DaySceneData } from './day';
 import type { DaySelectData } from './day-select';
 import type { UpgradesSceneData } from './upgrades';
@@ -43,6 +44,7 @@ export class DayResultScene extends Phaser.Scene {
   }
 
   create(): void {
+    fadeIn(this);
     const result = this.result;
     if (!result || !hasDay(result.dayId)) {
       this.scene.start(SceneKey.Menu);
@@ -172,7 +174,7 @@ export class DayResultScene extends Phaser.Scene {
     const canContinue =
       campaign && nextRef !== undefined && isDayUnlocked(save.data, nextRef, dayRefs);
     const toDay = (dayId: string): void =>
-      this.leave(() => this.scene.start(SceneKey.Day, { dayId } satisfies DaySceneData));
+      this.leave(() => switchScene(this, SceneKey.Day, { dayId } satisfies DaySceneData));
 
     let y = 968;
     if (campaign && total > 0) {
@@ -220,7 +222,7 @@ export class DayResultScene extends Phaser.Scene {
         cx,
         y,
         i18n.t('result.menu'),
-        () => this.leave(() => this.scene.start(SceneKey.Menu)),
+        () => this.leave(() => switchScene(this, SceneKey.Menu)),
         { color: ui.secondary, height: 88 },
       );
       return;
@@ -233,7 +235,7 @@ export class DayResultScene extends Phaser.Scene {
       i18n.t('result.upgrades'),
       () =>
         this.leave(() =>
-          this.scene.start(SceneKey.Upgrades, {
+          switchScene(this, SceneKey.Upgrades, {
             location: level.location,
           } satisfies UpgradesSceneData),
         ),
@@ -246,7 +248,7 @@ export class DayResultScene extends Phaser.Scene {
       i18n.t('result.days'),
       () =>
         this.leave(() =>
-          this.scene.start(SceneKey.DaySelect, {
+          switchScene(this, SceneKey.DaySelect, {
             location: level.location,
           } satisfies DaySelectData),
         ),

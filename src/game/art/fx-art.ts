@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { Tex } from '../keys';
-import { makeTexture, rGradient, vGradient, type Ctx } from './canvas';
+import { makeTexture, rGradient, roundRect, vGradient, type Ctx } from './canvas';
 
 function drawFlame(ctx: Ctx, width: number, height: number): void {
   const cx = width / 2;
@@ -95,7 +95,33 @@ function drawStar(ctx: Ctx, size: number): void {
   ctx.stroke();
 }
 
+function drawFinger(ctx: Ctx): void {
+  const parts: readonly (readonly [number, number, number, number, number])[] = [
+    [30, 6, 24, 62, 12],
+    [18, 46, 52, 50, 18],
+    [6, 58, 24, 30, 12],
+    [52, 52, 20, 22, 10],
+    [52, 70, 18, 20, 9],
+  ];
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#3a2418';
+  ctx.lineWidth = 8;
+  for (const [x, y, w, h, r] of parts) {
+    roundRect(ctx, x, y, w, h, r);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#fff7ec';
+  for (const [x, y, w, h, r] of parts) {
+    roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(58,36,24,0.18)';
+  roundRect(ctx, 34, 10, 16, 10, 5);
+  ctx.fill();
+}
+
 export function generateFxArt(scene: Phaser.Scene): void {
+  makeTexture(scene, Tex.Finger, 80, 104, drawFinger);
   makeTexture(scene, Tex.Star, 64, 64, (ctx) => drawStar(ctx, 64));
   makeTexture(scene, Tex.Flame, 120, 180, drawFlame);
   makeTexture(scene, Tex.Puff, 64, 64, (ctx) =>

@@ -42,6 +42,8 @@ export const layout = {
   stripTop: 1122,
   stripBottom: grillTop + grillH - 12,
   coalsButtonY: 1246,
+  tutorialUpperY: 490,
+  tutorialLowerY: 1164,
 
   tapSlop: 14,
   plateMagnet: 150,

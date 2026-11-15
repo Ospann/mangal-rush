@@ -246,9 +246,30 @@ describe('save migration', () => {
       upgrades: {},
       regulars: {},
       buzz: 0,
+      toyBest: 0,
+      daily: null,
       soundEnabled: false,
       language: 'ru',
     });
+  });
+
+  it('adds the toy record and daily task to a version 4 save', () => {
+    const data = {
+      money: 320,
+      stars: { '1-1': 2 },
+      upgrades: { roadside: { coal: 1 } },
+      regulars: { granny: 3 },
+      buzz: -1,
+      soundEnabled: false,
+      language: 'en',
+    };
+    expect(migrate({ v: 4, data }, saveSchema)).toEqual({ ...data, toyBest: 0, daily: null });
+  });
+
+  it('has a migration for every version up to the current one', () => {
+    for (let version = 1; version < saveSchema.version; version += 1) {
+      expect(() => migrate({ v: version, data: {} }, saveSchema)).not.toThrow();
+    }
   });
 
   it('keeps settings from version 2 and starts fresh progress', () => {
@@ -267,6 +288,16 @@ describe('save migration', () => {
       upgrades: { roadside: { grill: 1 } },
       regulars: { taxi: 2 },
       buzz: 1,
+      toyBest: 1840,
+      daily: {
+        date: '2026-11-15',
+        kind: 'serve',
+        meat: null,
+        target: 12,
+        reward: 250,
+        progress: 4,
+        claimed: false,
+      },
       soundEnabled: true,
       language: 'tr',
     };

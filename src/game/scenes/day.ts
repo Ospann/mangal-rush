@@ -3,13 +3,29 @@ import { isTranslationKey } from '../../i18n';
 import { ui } from '../art/palette';
 import { SfxPlayer } from '../audio/sfx';
 import { balance, eventKinds, type MeatKind } from '../balance';
+import {
+  advanceDaily,
+  currentDaily,
+  dateKey,
+  isDailyDone,
+  type DailyEvent,
+  type DailyTask,
+} from '../daily';
 import { devParams } from '../dev-params';
 import { FONT_FAMILY, SceneKey, Sfx, Tex } from '../keys';
-import { DEFAULT_DAY_ID, hasDay, loadDay } from '../levels';
+import {
+  availableMeats,
+  DEFAULT_DAY_ID,
+  hasDay,
+  loadDay,
+  TOY_DAY_ID,
+  toyLevel,
+  toyMods,
+} from '../levels';
 import { baseMods, modsFor, withBuzz } from '../locations';
 import { applyOutcome, evaluateDay } from '../progress';
 import { regulars } from '../regulars';
-import { DaySim } from '../sim/day-sim';
+import { DaySim, type Guest } from '../sim/day-sim';
 import { services } from '../services';
 import { Button } from '../ui/button';
 import { goalShortText, goalText } from '../ui/goal-text';
@@ -35,8 +51,8 @@ import { PlateView } from '../view/plate-view';
 import { SkewerSprite } from '../view/skewer-sprite';
 import { StationsView } from '../view/stations-view';
 import type { DayResultData } from './day-result';
-import { REGISTRY_LOCATION } from './day-select';
-import { pauseGame } from './pause';
+import { REGISTRY_HELPER_PASS, REGISTRY_LOCATION } from './day-select';
+import { pauseGame, QUIT_EVENT, REGISTRY_DAY } from './pause';
 
 export interface DaySceneData {
   dayId: string;
@@ -96,6 +112,13 @@ export class DayScene extends Phaser.Scene {
   private coalsLabel = '';
   private shownMoney = 0;
   private leaving = false;
+  private toy = false;
+  private frozen = false;
+  private reviveUsed = false;
+  private freshUsed = false;
+  private freshButton!: Button;
+  private daily: DailyTask | null = null;
+  private modal: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super(SceneKey.Day);
@@ -108,16 +131,37 @@ export class DayScene extends Phaser.Scene {
   create(): void {
     const { platform, gameplay } = services();
     const { save } = services();
-    const level = loadDay(this.dayId);
+    this.toy = this.dayId === TOY_DAY_ID;
+    const level = this.toy ? toyLevel(Math.floor(Math.random() * 2 ** 31)) : loadDay(this.dayId);
     const campaign = level.day > 0;
     this.buzz = campaign ? Math.sign(save.data.buzz) : 0;
-    const mods = campaign
-      ? withBuzz(modsFor(level.location, save.data.upgrades[level.location]), this.buzz)
-      : baseMods();
-    this.sim = new DaySim(level, mods, campaign ? { ...save.data.regulars } : null);
+    const owned = this.toy
+      ? toyMods()
+      : campaign
+        ? withBuzz(modsFor(level.location, save.data.upgrades[level.location]), this.buzz)
+        : baseMods();
+    const hired = campaign && !owned.helper && this.registry.get(REGISTRY_HELPER_PASS) === true;
+    if (hired) this.registry.set(REGISTRY_HELPER_PASS, false);
+    const mods = hired ? { ...owned, helper: true } : owned;
+    this.sim = new DaySim(
+      level,
+      mods,
+      campaign ? { ...save.data.regulars } : null,
+      this.toy ? balance.toyMode : null,
+    );
     if (campaign && save.data.buzz !== 0) save.set('buzz', 0);
     this.toastY = 0;
-    this.registry.set(REGISTRY_LOCATION, level.location);
+    this.frozen = false;
+    this.reviveUsed = false;
+    this.freshUsed = false;
+    this.modal = [];
+    this.daily = null;
+    if (campaign || this.toy) {
+      this.daily = currentDaily(save.data.daily, dateKey(new Date()), availableMeats(save.data));
+      if (this.daily !== save.data.daily) save.set('daily', this.daily);
+    }
+    this.registry.set(REGISTRY_DAY, this.dayId);
+    if (!this.toy) this.registry.set(REGISTRY_LOCATION, level.location);
     this.shownEvent = '';
     this.shownGoal = '';
     this.closingShown = false;
@@ -135,7 +179,15 @@ export class DayScene extends Phaser.Scene {
     this.bindInput();
 
     this.sfx.startSizzle();
-    platform.levelStart({ world: this.sim.level.location, level: this.sim.level.id });
+    this.sfx.setLoop(Sfx.Ambience, 0.5);
+    if (hired) {
+      const { i18n } = services();
+      this.time.delayedCall(2900, () => this.toast(i18n.t('day.helper')));
+    }
+    platform.levelStart({
+      world: this.toy ? TOY_DAY_ID : this.sim.level.location,
+      level: this.sim.level.id,
+    });
     gameplay.start();
     this.showIntro();
     if (this.buzz !== 0) {
@@ -155,7 +207,8 @@ export class DayScene extends Phaser.Scene {
 
   override update(_time: number, delta: number): void {
     const dtSec = delta / 1000;
-    this.sim.step(dtSec * devParams.speed);
+    if (!this.frozen) this.sim.step(dtSec * devParams.speed);
+    this.sfx.updateLoops(dtSec);
 
     this.grillView.update(dtSec);
     this.sim.plates.forEach((plate, index) => {
@@ -194,7 +247,7 @@ export class DayScene extends Phaser.Scene {
 
     this.helpText = null;
     const { day, location } = this.sim.level;
-    if (day > 1 || (day === 1 && location !== 'roadside')) return;
+    if (this.toy || day > 1 || (day === 1 && location !== 'roadside')) return;
     this.helpText = addLabel(
       this,
       layout.width / 2,
@@ -242,15 +295,17 @@ export class DayScene extends Phaser.Scene {
   private showIntro(): void {
     const { i18n } = services();
     const level = this.sim.level;
-    const title =
-      level.day > 0
+    const title = this.toy
+      ? i18n.t('toy.title')
+      : level.day > 0
         ? `${i18n.t(`location.${level.location}`)} · ${i18n.t('select.day', { day: level.day })}`
         : level.id;
+    const body = this.toy ? i18n.t('toy.intro') : goalText(i18n, level.goal);
     const panel = this.add.container(layout.width / 2, 600).setDepth(Depth.Float);
     panel.add([
       this.add.rectangle(0, 0, 640, 170, ui.panel, 0.92).setStrokeStyle(4, 0xffd447, 0.9),
       addLabel(this, 0, -34, title, 36, ui.gold).setFontStyle('bold'),
-      addLabel(this, 0, 28, goalText(i18n, level.goal), 30, ui.text).setWordWrapWidth(600),
+      addLabel(this, 0, 28, body, 28, ui.text).setWordWrapWidth(600),
     ]);
     panel.setScale(0.8).setAlpha(0);
     this.tweens.add({ targets: panel, scale: 1, alpha: 1, duration: 220, ease: 'Back.easeOut' });
@@ -319,15 +374,25 @@ export class DayScene extends Phaser.Scene {
 
     this.coalsButton = new Button(
       this,
-      layout.width / 2,
+      layout.width / 2 - 136,
       layout.coalsButtonY,
       i18n.t('day.coals'),
       () => {
-        this.sim.addCoals();
+        if (!this.frozen) this.sim.addCoals();
       },
-      { width: 360, height: 60, fontSize: 30, color: ui.primary },
+      { width: 380, height: 60, fontSize: 28, color: ui.primary },
     );
     this.coalsButton.setDepth(Depth.Hud);
+
+    this.freshButton = new Button(
+      this,
+      layout.width / 2 + 202,
+      layout.coalsButtonY,
+      i18n.t('day.fresh'),
+      () => this.useFreshCoals(),
+      { width: 264, height: 60, fontSize: 26, color: ui.green },
+    );
+    this.freshButton.setDepth(Depth.Hud);
   }
 
   private bindSim(): void {
@@ -419,10 +484,11 @@ export class DayScene extends Phaser.Scene {
       this.fx.splash(slotX(slot, slots), meatMid + 40);
     });
 
-    events.on('taken', ({ plate, quality }) => {
+    events.on('taken', ({ plate, kind, quality }) => {
       const view = this.plateViews[plate];
       this.sfx.play(Sfx.Place, 0.8, 1.2);
       view?.bump();
+      if (quality === 'perfect') this.bumpDaily({ kind: 'perfect', meat: kind });
       if (quality !== 'perfect' || !view) return;
       this.sfx.play(Sfx.Perfect, 0.7, 1.12);
       this.fx.sparkle(view.homeX, view.homeY, 6, 70);
@@ -496,6 +562,7 @@ export class DayScene extends Phaser.Scene {
     });
 
     events.on('eventEnd', ({ type }) => {
+      if (type === 'rain') this.sfx.setLoop(Sfx.Rain, 0);
       if (type === 'rain') this.fx.setRain(false);
       if (type === 'wind') this.fx.setWind(false);
     });
@@ -504,6 +571,7 @@ export class DayScene extends Phaser.Scene {
       const x = seatX(guest.seat, this.sim.level.seats);
       this.sfx.play(Sfx.Bell, 0.6);
       this.time.delayedCall(160, () => this.sfx.play(Sfx.Coin, 0.7));
+      if (tip > 0) this.bumpDaily({ kind: 'tips', amount: tip });
       this.fx.floatText(x, layout.guestY - 60, `+${price}`, ui.gold, 44);
       if (tip > 0) {
         this.time.delayedCall(220, () =>
@@ -538,8 +606,24 @@ export class DayScene extends Phaser.Scene {
 
     events.on('guestLeft', ({ guest }) => {
       const happy = guest.state === 'served';
+      if (happy) this.bumpDaily({ kind: 'serve' });
+      else this.sfx.play(Sfx.Hm, 0.9, 0.9);
+      if (!happy && !this.reviveUsed && !this.frozen && !this.leaving) {
+        this.offerRevive(guest);
+        return;
+      }
       this.guestViews.get(guest.id)?.leave(happy);
-      if (!happy) this.sfx.play(Sfx.Hm, 0.9, 0.9);
+    });
+
+    events.on('guestBack', ({ guest }) => {
+      this.sfx.play(Sfx.Bell, 0.7, 1.1);
+      this.fx.floatText(
+        seatX(guest.seat, this.sim.level.seats),
+        layout.guestY - 40,
+        i18n.t('revive.back'),
+        ui.good,
+        32,
+      );
     });
 
     events.on('guestGone', () => {
@@ -554,6 +638,7 @@ export class DayScene extends Phaser.Scene {
     events.on('eventStart', ({ type }) => {
       this.sfx.play(type === 'rush' ? Sfx.Bell : Sfx.Fan, 0.8, 0.7);
       this.fx.floatText(layout.width / 2, 300, i18n.t(`event.${type}`), '#ffb347', 44);
+      if (type === 'rain') this.sfx.setLoop(Sfx.Rain, 0.45);
       if (type === 'rain') this.fx.setRain(true);
       if (type === 'wind') this.fx.setWind(true);
     });
@@ -574,11 +659,119 @@ export class DayScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, (pointer: Phaser.Input.Pointer) =>
       this.onUp(pointer),
     );
-    this.events.on(Phaser.Scenes.Events.PAUSE, () => this.cancelGestures());
+    const onPause = (): void => this.cancelGestures();
+    const onResume = (): void => {
+      if (this.modal.length > 0) services().gameplay.stop();
+    };
+    const onQuit = (): void => this.finish();
+    this.events.on(Phaser.Scenes.Events.PAUSE, onPause);
+    this.events.on(Phaser.Scenes.Events.RESUME, onResume);
+    this.events.on(QUIT_EVENT, onQuit);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.PAUSE, onPause);
+      this.events.off(Phaser.Scenes.Events.RESUME, onResume);
+      this.events.off(QUIT_EVENT, onQuit);
+    });
+  }
+
+  private bumpDaily(event: DailyEvent): void {
+    const before = this.daily;
+    if (!before) return;
+    const advanced = advanceDaily(before, event);
+    if (advanced === before) return;
+    const done = isDailyDone(advanced);
+    const next = done ? { ...advanced, claimed: true } : advanced;
+    this.daily = next;
+    const { save, i18n } = services();
+    save.update((draft) => {
+      draft.daily = next;
+      if (done) draft.money += next.reward;
+    });
+    if (!done) return;
+    this.sfx.play(Sfx.Fanfare, 0.6);
+    this.toast(i18n.t('daily.done', { amount: next.reward }));
+  }
+
+  private useFreshCoals(): void {
+    if (this.freshUsed || this.frozen || this.sim.finished) return;
+    this.frozen = true;
+    this.cancelGestures();
+    void services()
+      .ads.showRewarded()
+      .then((rewarded) => {
+        this.frozen = false;
+        if (!rewarded || !this.sim.freshCoals()) return;
+        this.freshUsed = true;
+        this.freshButton.setEnabled(false);
+        this.fx.floatText(
+          layout.width / 2,
+          layout.skewerY,
+          services().i18n.t('day.fresh.done'),
+          ui.gold,
+          40,
+        );
+      });
+  }
+
+  private offerRevive(guest: Guest): void {
+    const { i18n, gameplay, ads } = services();
+    this.reviveUsed = true;
+    this.frozen = true;
+    this.cancelGestures();
+    gameplay.stop();
+
+    const cx = layout.width / 2;
+    let answered = false;
+    const close = (back: boolean): void => {
+      for (const object of this.modal) object.destroy();
+      this.modal = [];
+      this.frozen = false;
+      if (!back || !this.sim.reviveGuest(guest.seat)) this.guestViews.get(guest.id)?.leave(false);
+      if (!this.scene.isPaused()) gameplay.start();
+    };
+    const answer = (watch: boolean): void => {
+      if (answered) return;
+      answered = true;
+      if (!watch) {
+        close(false);
+        return;
+      }
+      void ads.showRewarded().then((rewarded) => close(rewarded));
+    };
+
+    this.modal = [
+      this.add
+        .rectangle(0, 0, layout.width, layout.height, 0x000000, 0.6)
+        .setOrigin(0)
+        .setDepth(Depth.Modal)
+        .setInteractive(),
+      this.add
+        .rectangle(cx, 560, 620, 420, ui.panel, 0.97)
+        .setStrokeStyle(4, 0xffd447, 0.9)
+        .setDepth(Depth.Modal),
+      addLabel(this, cx, 420, i18n.t('revive.title'), 46, ui.gold)
+        .setFontStyle('bold')
+        .setDepth(Depth.Modal),
+      addLabel(this, cx, 500, i18n.t('revive.text'), 28, ui.text)
+        .setWordWrapWidth(560)
+        .setDepth(Depth.Modal),
+      Button.create(this, cx, 610, i18n.t('revive.yes'), () => answer(true), {
+        color: ui.green,
+        width: 460,
+        height: 92,
+        fontSize: 38,
+      }).setDepth(Depth.Modal),
+      Button.create(this, cx, 712, i18n.t('revive.no'), () => answer(false), {
+        color: ui.secondary,
+        width: 460,
+        height: 72,
+        fontSize: 30,
+      }).setDepth(Depth.Modal),
+    ];
   }
 
   private onDown(pointer: Phaser.Input.Pointer): void {
-    if (this.sim.finished || this.gestures.has(pointer.id)) return;
+    if (this.sim.finished || this.frozen || this.gestures.has(pointer.id)) return;
     const { x, y } = pointer;
     const slots = this.sim.slotCount;
     const insideSlots = x >= layout.slotsLeft - 12 && x <= layout.slotsRight + 12;
@@ -871,9 +1064,9 @@ export class DayScene extends Phaser.Scene {
     }
 
     const closing = this.sim.isClosing;
-    this.timeText.setText(formatTime(this.sim.timeLeftSec));
-    this.timeText.setColor(closing || this.sim.timeLeftSec < 15 ? ui.bad : ui.text);
-    if (closing && !this.closingShown) {
+    this.timeText.setText(formatTime(this.toy ? this.sim.timeSec : this.sim.timeLeftSec));
+    this.timeText.setColor(!this.toy && (closing || this.sim.timeLeftSec < 15) ? ui.bad : ui.text);
+    if (closing && !this.closingShown && !this.toy) {
       this.closingShown = true;
       this.fx.floatText(layout.width / 2, 300, i18n.t('day.closing'), ui.bad, 44);
     }
@@ -886,13 +1079,16 @@ export class DayScene extends Phaser.Scene {
     }
 
     const goal = this.sim.goalProgress();
-    const goalLabel = goalShortText(i18n, this.sim.level.goal, goal.value);
+    const lost = this.sim.stats.lost;
+    const goalLabel = this.sim.endless
+      ? i18n.t('toy.lost', { count: lost, max: this.sim.endless.maxLost })
+      : goalShortText(i18n, this.sim.level.goal, goal.value);
     if (goalLabel !== this.shownGoal || this.goalMet !== goal.met) {
       this.shownGoal = goalLabel;
       this.goalMet = goal.met;
       this.goalText.setText(goalLabel);
-      const failed = this.sim.level.goal.type === 'noBurn' && !goal.met;
-      this.goalText.setColor(failed ? ui.bad : goal.met ? ui.good : ui.text);
+      const failed = this.toy ? lost > 0 : this.sim.level.goal.type === 'noBurn' && !goal.met;
+      this.goalText.setColor(failed ? ui.bad : goal.met && !this.toy ? ui.good : ui.text);
     }
 
     this.comboText.setVisible(this.sim.combo >= 2);
@@ -920,8 +1116,30 @@ export class DayScene extends Phaser.Scene {
     this.leaving = true;
     const { platform, gameplay, ads, save } = services();
     const level = this.sim.level;
+    this.frozen = true;
     this.cancelGestures();
     gameplay.stop();
+
+    if (this.toy) {
+      const score = Math.round(this.sim.revenue);
+      const best = save.data.toyBest;
+      if (score > best) save.set('toyBest', score);
+      platform.levelComplete({ world: TOY_DAY_ID, level: TOY_DAY_ID });
+      ads.markLevelCompleted();
+      const toyResult: DayResultData = {
+        dayId: this.dayId,
+        money: this.sim.money,
+        tips: this.sim.tips,
+        stars: 0,
+        goalMet: false,
+        critic: 0,
+        blogger: 0,
+        stats: { ...this.sim.stats },
+        toy: { best: Math.max(best, score), record: score > best, timeSec: this.sim.timeSec },
+      };
+      this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, toyResult));
+      return;
+    }
 
     const { critic, blogger } = this.sim.verdicts;
     const outcome = evaluateDay(level.stars, this.sim.revenue, this.sim.goalProgress().met, critic);
@@ -947,6 +1165,7 @@ export class DayScene extends Phaser.Scene {
       critic,
       blogger,
       stats: { ...this.sim.stats },
+      toy: null,
     };
     this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, result));
   }

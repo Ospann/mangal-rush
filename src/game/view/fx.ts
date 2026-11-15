@@ -17,6 +17,7 @@ export const Depth = {
   Dragged: 20,
   Hud: 30,
   Float: 40,
+  Modal: 50,
 } as const;
 
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;

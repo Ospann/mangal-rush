@@ -1,5 +1,6 @@
 import type { SaveSchema } from '@core/save';
 import type { Language } from '../i18n';
+import type { DailyTask } from './daily';
 import type { LocationId, UpgradeLevels } from './locations';
 
 export interface GameSave extends Record<string, unknown> {
@@ -8,18 +9,22 @@ export interface GameSave extends Record<string, unknown> {
   upgrades: Partial<Record<LocationId, UpgradeLevels>>;
   regulars: Record<string, number>;
   buzz: number;
+  toyBest: number;
+  daily: DailyTask | null;
   soundEnabled: boolean;
   language: Language | null;
 }
 
 export const saveSchema: SaveSchema<GameSave> = {
-  version: 4,
+  version: 5,
   defaults: () => ({
     money: 0,
     stars: {},
     upgrades: {},
     regulars: {},
     buzz: 0,
+    toyBest: 0,
+    daily: null,
     soundEnabled: true,
     language: null,
   }),
@@ -33,5 +38,6 @@ export const saveSchema: SaveSchema<GameSave> = {
       return { ...rest, money: 0, stars: {}, upgrades: {} };
     },
     4: (data) => ({ ...data, regulars: {}, buzz: 0 }),
+    5: (data) => ({ ...data, toyBest: 0, daily: null }),
   },
 };

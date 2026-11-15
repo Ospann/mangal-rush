@@ -52,6 +52,11 @@ export const Sfx = {
   Trash: 'sfx-trash',
   Pop: 'sfx-pop',
   Pour: 'sfx-pour',
+  Ambience: 'sfx-ambience',
+  Rain: 'sfx-rain',
+  Click: 'sfx-click',
+  Fanfare: 'sfx-fanfare',
+  Fail: 'sfx-fail',
 } as const;
 
 export type SfxKey = (typeof Sfx)[keyof typeof Sfx];

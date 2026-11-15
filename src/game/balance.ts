@@ -199,6 +199,22 @@ export const balance = {
     bonusPerSkewer: 25,
   },
 
+  toyMode: {
+    maxLost: 3,
+    rampSec: 540,
+    minIntervalMult: 0.2,
+    patienceGraceSec: 240,
+    patienceRampSec: 900,
+    minPatienceMult: 0.45,
+  },
+
+  daily: {
+    reward: 250,
+    perfect: [4, 7],
+    serve: [10, 16],
+    tips: [120, 220],
+  },
+
   events: {
     wind: { flareMult: 2.4 },
     rain: { decayMult: 2.6 },

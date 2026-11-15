@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { FONT_FAMILY } from '../keys';
+import { FONT_FAMILY, Sfx } from '../keys';
 
 export interface ButtonOptions {
   width?: number;
@@ -54,7 +54,9 @@ export class Button extends Phaser.GameObjects.Container {
       .on(Phaser.Input.Events.POINTER_DOWN, () => this.enabled && this.setScale(0.96))
       .on(Phaser.Input.Events.POINTER_UP, () => {
         this.setScale(1);
-        if (this.enabled) onClick();
+        if (!this.enabled) return;
+        if (scene.cache.audio.exists(Sfx.Click)) scene.sound.play(Sfx.Click, { volume: 0.5 });
+        onClick();
       });
 
     scene.add.existing(this);

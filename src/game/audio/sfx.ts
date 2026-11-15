@@ -22,7 +22,14 @@ export function generateAudio(scene: Phaser.Scene): void {
   }
 }
 
+interface Loop {
+  sound: LoopSound;
+  volume: number;
+  target: number;
+}
+
 export class SfxPlayer {
+  private readonly loops = new Map<SfxKey, Loop>();
   private sizzle: LoopSound | null = null;
   private sizzleVolume = 0;
   private readonly lastPlayed = new Map<SfxKey, number>();
@@ -53,7 +60,36 @@ export class SfxPlayer {
     this.sizzle.setRate(0.85 + Math.min(1.5, intensity) * 0.22);
   }
 
+  setLoop(key: SfxKey, target: number): void {
+    const existing = this.loops.get(key);
+    if (existing) {
+      existing.target = target;
+      return;
+    }
+    if (target <= 0 || !this.scene.cache.audio.exists(key)) return;
+    const sound = this.scene.sound.add(key, { loop: true, volume: 0 });
+    sound.play();
+    this.loops.set(key, { sound, volume: 0, target });
+  }
+
+  updateLoops(dtSec: number): void {
+    for (const loop of this.loops.values()) {
+      if (loop.volume === loop.target) continue;
+      const step = dtSec * 0.6;
+      loop.volume =
+        loop.volume < loop.target
+          ? Math.min(loop.target, loop.volume + step)
+          : Math.max(loop.target, loop.volume - step);
+      loop.sound.setVolume(loop.volume);
+    }
+  }
+
   stop(): void {
+    for (const loop of this.loops.values()) {
+      loop.sound.stop();
+      loop.sound.destroy();
+    }
+    this.loops.clear();
     this.sizzle?.stop();
     this.sizzle?.destroy();
     this.sizzle = null;

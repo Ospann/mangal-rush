@@ -6,6 +6,7 @@ type Render = (out: Float32Array, rate: number, rng: Rng) => void;
 interface SoundSpec {
   seconds: number;
   render: Render;
+  loopOverlapSec?: number;
 }
 
 const TAU = Math.PI * 2;
@@ -171,6 +172,84 @@ const pour: Render = (out, rate, rng) => {
   }
 };
 
+const ambience: Render = (out, rate, rng) => {
+  const seconds = out.length / rate;
+  const cars = [
+    { at: 0.24, width: 0.1, gain: 0.55 },
+    { at: 0.7, width: 0.075, gain: 0.4 },
+  ];
+  const chirps: { at: number; frequency: number }[] = [];
+  for (let group = 0; group < 4; group += 1) {
+    const at = rng.range(0.08, 0.9) * seconds;
+    const frequency = rng.range(2600, 4000);
+    for (let note = 0; note < 3; note += 1) {
+      chirps.push({ at: at + note * 0.13, frequency: frequency + note * 180 });
+    }
+  }
+  let low = 0;
+  let band = 0;
+  for (let index = 0; index < out.length; index += 1) {
+    const t = index / rate;
+    const progress = index / out.length;
+    const white = noise(rng);
+    low += (white - low) * 0.012;
+    band += (white - band) * 0.06;
+    let car = 0;
+    for (const pass of cars) {
+      const distance = (progress - pass.at) / pass.width;
+      car += pass.gain * Math.exp(-distance * distance);
+    }
+    let bird = 0;
+    for (const chirp of chirps) {
+      const local = t - chirp.at;
+      if (local < 0 || local >= 0.09) continue;
+      bird +=
+        Math.sin(TAU * (chirp.frequency + 7000 * local) * local) *
+        Math.sin((Math.PI * local) / 0.09) *
+        0.045;
+    }
+    out[index] = low * 1.7 + band * car * 0.55 + bird;
+  }
+};
+
+const rain: Render = (out, rate, rng) => {
+  let previous = 0;
+  let tick = 0;
+  for (let index = 0; index < out.length; index += 1) {
+    const white = noise(rng);
+    const high = white - previous * 0.7;
+    previous = white;
+    if (rng.next() < 190 / rate) tick = rng.range(0.3, 1);
+    tick *= 0.992;
+    out[index] = high * 0.17 + white * tick * 0.12;
+  }
+};
+
+const click: Render = (out, rate) => {
+  for (let index = 0; index < out.length; index += 1) {
+    const t = index / rate;
+    out[index] = Math.sin(TAU * (640 + 500 * Math.exp(-t * 90)) * t) * Math.exp(-t * 60) * 0.45;
+  }
+};
+
+function melody(notes: readonly number[], stepSec: number, decay: number): Render {
+  return (out, rate) => {
+    for (let index = 0; index < out.length; index += 1) {
+      const t = index / rate;
+      let sample = 0;
+      notes.forEach((frequency, order) => {
+        const local = t - order * stepSec;
+        if (local < 0) return;
+        sample +=
+          (Math.sin(TAU * frequency * local) + 0.25 * Math.sin(TAU * frequency * 2 * local)) *
+          Math.exp(-local * decay) *
+          Math.min(1, local * 300);
+      });
+      out[index] = sample * 0.24;
+    }
+  };
+}
+
 const specs: Record<SfxKey, SoundSpec> = {
   [Sfx.Sizzle]: { seconds: 2.4, render: sizzle },
   [Sfx.Flare]: { seconds: 0.7, render: flare },
@@ -200,6 +279,11 @@ const specs: Record<SfxKey, SoundSpec> = {
   [Sfx.Trash]: { seconds: 0.3, render: trash },
   [Sfx.Pop]: { seconds: 0.14, render: pop },
   [Sfx.Pour]: { seconds: 0.45, render: pour },
+  [Sfx.Ambience]: { seconds: 9, render: ambience, loopOverlapSec: 1 },
+  [Sfx.Rain]: { seconds: 3, render: rain, loopOverlapSec: 0.4 },
+  [Sfx.Click]: { seconds: 0.07, render: click },
+  [Sfx.Fanfare]: { seconds: 1.1, render: melody([523.25, 659.25, 783.99, 1046.5], 0.11, 5) },
+  [Sfx.Fail]: { seconds: 0.8, render: melody([392, 311.13], 0.22, 6) },
 };
 
 export function renderSounds(context: BaseAudioContext): Map<SfxKey, AudioBuffer> {
@@ -208,9 +292,21 @@ export function renderSounds(context: BaseAudioContext): Map<SfxKey, AudioBuffer
   let seed = 1;
   for (const key of Object.values(Sfx)) {
     const spec = specs[key];
-    const buffer = context.createBuffer(1, Math.floor(rate * spec.seconds), rate);
+    const length = Math.floor(rate * spec.seconds);
+    const overlap = Math.floor(rate * (spec.loopOverlapSec ?? 0));
+    const buffer = context.createBuffer(1, length, rate);
     const data = buffer.getChannelData(0);
-    spec.render(data, rate, createRng(seed));
+    if (overlap > 0) {
+      const source = new Float32Array(length + overlap);
+      spec.render(source, rate, createRng(seed));
+      data.set(source.subarray(0, length));
+      for (let index = 0; index < overlap; index += 1) {
+        const gain = index / overlap;
+        data[index] = (source[index] ?? 0) * gain + (source[length + index] ?? 0) * (1 - gain);
+      }
+    } else {
+      spec.render(data, rate, createRng(seed));
+    }
     seed += 1;
     for (let index = 0; index < data.length; index += 1) {
       data[index] = Math.max(-1, Math.min(1, data[index] ?? 0));

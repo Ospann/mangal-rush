@@ -1,7 +1,9 @@
 import { locationIds, locations, type LocationId } from '../locations';
-import type { DayRef } from '../progress';
+import { meatKinds, type MeatKind } from '../balance';
+import { isDayUnlocked, type DayRef, type Progress } from '../progress';
 import testDay2 from './test-day-2.json';
 import testDay from './test-day.json';
+import { TOY_DAY_ID, toyLevel } from './toy';
 import type { DayLevel } from './types';
 import { parseDayLevel } from './validate';
 
@@ -20,6 +22,7 @@ for (const [source, raw] of [
   const level = parseDayLevel(raw, source);
   levels.set(level.id, level);
 }
+levels.set(TOY_DAY_ID, toyLevel());
 
 export const campaignDays: readonly DayLevel[] = [...levels.values()]
   .filter((level) => level.day > 0)
@@ -51,9 +54,15 @@ export function daysOf(location: LocationId): DayLevel[] {
   return campaignDays.filter((level) => level.location === location);
 }
 
+export function availableMeats(progress: Progress): MeatKind[] {
+  const open = campaignDays.filter((level) => isDayUnlocked(progress, level, dayRefs));
+  return meatKinds.filter((kind) => open.some((level) => level.meats.includes(kind)));
+}
+
 export function nextDayId(id: string): string | null {
   const index = campaignDays.findIndex((level) => level.id === id);
   return index === -1 ? null : (campaignDays[index + 1]?.id ?? null);
 }
 
+export { TOY_DAY_ID, toyLevel, toyMods } from './toy';
 export type { DayEvent, DayGoal, DayLevel, OrderItem, OrderTemplate } from './types';

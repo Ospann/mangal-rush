@@ -1,8 +1,8 @@
 import { writeFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { campaignDays } from '../src/game/levels';
+import { campaignDays, toyLevel, toyMods } from '../src/game/levels';
 import { modsFor } from '../src/game/locations';
-import { averageBot, expertBot, reportDay, type DayReport } from '../src/game/sim/bot';
+import { averageBot, expertBot, reportDay, runToy, type DayReport } from '../src/game/sim/bot';
 
 const RUNS = Number(process.env.SIM_RUNS ?? 30);
 
@@ -41,6 +41,38 @@ it('simulates the campaign with bots', () => {
       if (skill === averageBot) entry.avg = report;
       else entry.expert = report;
     }
+  }
+  lines.push(
+    '',
+    `toy mode, ${RUNS} runs`,
+    'bot        time(avg) time(min-max)  score(avg) score(max) served',
+  );
+  for (const [name, skill] of [
+    ['average', averageBot],
+    ['expert', expertBot],
+  ] as const) {
+    const runs = Array.from({ length: RUNS }, (_, seed) =>
+      runToy(toyLevel(), toyMods(), skill, seed + 1),
+    );
+    const avg = (pick: (run: (typeof runs)[number]) => number): number =>
+      runs.reduce((sum, run) => sum + pick(run), 0) / runs.length;
+    const times = runs.map((run) => run.timeSec);
+    lines.push(
+      [
+        name.padEnd(10),
+        `${Math.round(avg((run) => run.timeSec))}s`.padStart(9),
+        `${Math.round(Math.min(...times))}-${Math.round(Math.max(...times))}s`.padStart(13),
+        Math.round(avg((run) => run.revenue))
+          .toString()
+          .padStart(11),
+        Math.round(Math.max(...runs.map((run) => run.revenue)))
+          .toString()
+          .padStart(10),
+        avg((run) => run.served)
+          .toFixed(1)
+          .padStart(6),
+      ].join(' '),
+    );
   }
   console.log(lines.join('\n'));
   if (process.env.SIM_OUT) writeFileSync(process.env.SIM_OUT, JSON.stringify(calibration));

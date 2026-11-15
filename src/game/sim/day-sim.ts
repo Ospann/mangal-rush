@@ -66,6 +66,15 @@ export interface Fridge {
 
 export type { Plate } from './orders';
 
+export interface EndlessRules {
+  maxLost: number;
+  rampSec: number;
+  minIntervalMult: number;
+  patienceGraceSec: number;
+  patienceRampSec: number;
+  minPatienceMult: number;
+}
+
 export interface DayStats {
   served: number;
   lost: number;
@@ -96,10 +105,11 @@ export type DayEvents = {
   friendsComing: { guest: Guest; count: number };
   eventStart: { type: EventKind };
   eventEnd: { type: EventKind };
-  taken: { slot: number; plate: number; quality: Doneness };
+  taken: { slot: number; plate: number; kind: MeatKind; quality: Doneness };
   trashed: { count: number };
   fanned: { slot: number };
   coalsAdded: undefined;
+  guestBack: { guest: Guest };
   guestArrived: { guest: Guest };
   guestLeft: { guest: Guest };
   guestGone: { seat: number };
@@ -146,14 +156,17 @@ export class DaySim {
   private readonly startedEvents = new Set<number>();
   private readonly visitedToday = new Set<string>();
   private readonly regularVisits: RegularVisits | null;
+  readonly endless: EndlessRules | null;
 
   constructor(
     readonly level: DayLevel,
     mods: DayMods = baseMods(),
     regularVisits: RegularVisits | null = null,
+    endless: EndlessRules | null = null,
   ) {
     this.mods = mods;
     this.regularVisits = regularVisits;
+    this.endless = endless;
     this.slotCount = level.grillSlots ?? mods.grillSlots;
     this.rng = createRng(level.seed);
     this.grill = new Grill(
@@ -173,6 +186,7 @@ export class DaySim {
   }
 
   get isClosing(): boolean {
+    if (this.endless) return this.stats.lost >= this.endless.maxLost;
     return this.timeSec >= this.level.durationSec;
   }
 
@@ -225,7 +239,7 @@ export class DaySim {
     this.activePlate = plateIndex;
     const quality = qualityOf(skewer);
     if (quality === 'perfect') this.stats.perfectSkewers += 1;
-    this.events.emit('taken', { slot, plate: plateIndex, quality });
+    this.events.emit('taken', { slot, plate: plateIndex, kind: skewer.kind, quality });
     return true;
   }
 
@@ -324,6 +338,26 @@ export class DaySim {
   addCoals(): boolean {
     if (this.finished || !this.grill.coals.add()) return false;
     this.events.emit('coalsAdded', undefined);
+    return true;
+  }
+
+  freshCoals(): boolean {
+    if (this.finished) return false;
+    this.grill.coals.refresh();
+    this.events.emit('coalsAdded', undefined);
+    return true;
+  }
+
+  reviveGuest(seat: number): boolean {
+    const guest = this.seats[seat];
+    if (this.finished || !guest || guest.state !== 'angry') return false;
+    guest.state = 'waiting';
+    guest.patienceLeft = guest.patienceSec;
+    guest.leaveLeftSec = 0;
+    this.stats.lost = Math.max(0, this.stats.lost - 1);
+    if (guest.kind === 'blogger') this.verdicts.blogger = 0;
+    if (guest.kind === 'critic') this.verdicts.critic = 0;
+    this.events.emit('guestBack', { guest });
     return true;
   }
 
@@ -447,7 +481,10 @@ export class DaySim {
     this.tickGuests(dtSec);
     this.tickArrivals(dtSec);
 
-    if (this.isClosing && this.seats.every((guest) => guest === null)) {
+    const over = this.endless
+      ? this.isClosing && !this.seats.some((guest) => guest?.state === 'angry')
+      : this.isClosing && this.seats.every((guest) => guest === null);
+    if (over) {
       this.finished = true;
       this.events.emit('finished', undefined);
     }
@@ -573,8 +610,8 @@ export class DaySim {
     }
 
     if (this.isClosing) return;
-    this.nextArrivalSec -=
-      dtSec / (this.isEventActive('rush') ? balance.events.rush.intervalMult : 1);
+    const rush = this.isEventActive('rush') ? balance.events.rush.intervalMult : 1;
+    this.nextArrivalSec -= dtSec / (rush * this.rampMult());
     if (this.nextArrivalSec > 0 || seat === -1) return;
 
     const friend = this.pendingKinds.shift();
@@ -585,6 +622,19 @@ export class DaySim {
       this.pendingKinds.length > 0
         ? balance.guestRules.studentFriendDelaySec
         : this.rng.range(min, max);
+  }
+
+  private rampMult(): number {
+    const rules = this.endless;
+    if (!rules) return 1;
+    return Math.max(rules.minIntervalMult, 1 / (1 + this.timeSec / rules.rampSec));
+  }
+
+  private patienceRamp(): number {
+    const rules = this.endless;
+    if (!rules) return 1;
+    const late = Math.max(0, this.timeSec - rules.patienceGraceSec);
+    return Math.max(rules.minPatienceMult, 1 - late / rules.patienceRampSec);
   }
 
   private seat(
@@ -601,6 +651,7 @@ export class DaySim {
       patienceOverride ??
       this.level.guests.patienceSec *
         this.mods.patienceMult *
+        this.patienceRamp() *
         balance.guestTypes[kind].patienceMult;
 
     let regular: string | null = null;

@@ -75,6 +75,12 @@ export function isDayUnlocked(progress: Progress, day: DayRef, days: readonly Da
   return earlier.every((other) => dayStars(progress, other.id) >= 1);
 }
 
+export function isToyUnlocked(progress: Progress, days: readonly DayRef[]): boolean {
+  const first = locationIds[0];
+  const firstDays = days.filter((day) => day.location === first);
+  return firstDays.length > 0 && firstDays.every((day) => dayStars(progress, day.id) >= 1);
+}
+
 export function locationLevels(progress: Progress, location: LocationId): UpgradeLevels {
   return progress.upgrades[location] ?? {};
 }

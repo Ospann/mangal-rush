@@ -21,6 +21,12 @@ export interface DayResultData {
   critic: number;
   blogger: number;
   stats: DayStats;
+  toy: { best: number; record: boolean; timeSec: number } | null;
+}
+
+function formatTime(seconds: number): string {
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
 export class DayResultScene extends Phaser.Scene {
@@ -47,16 +53,42 @@ export class DayResultScene extends Phaser.Scene {
     const cx = width / 2;
     const level = loadDay(result.dayId);
     const campaign = level.day > 0;
-    const passed = result.stars >= 1;
+    const toy = result.toy;
+    const passed = result.stars >= 1 || toy !== null;
 
     this.add.image(0, 0, Tex.Background).setOrigin(0);
     this.add.rectangle(0, 0, width, height, 0x2a1b14, 0.78).setOrigin(0);
 
-    addLabel(this, cx, 96, i18n.t('result.title'), 64, ui.gold)
+    addLabel(this, cx, 96, i18n.t(toy ? 'toy.result.title' : 'result.title'), 64, ui.gold)
       .setFontStyle('bold')
       .setStroke('#3a2418', 10);
 
-    for (let star = 0; star < 3; star += 1) {
+    const jingle = passed ? Sfx.Fanfare : Sfx.Fail;
+    if (this.cache.audio.exists(jingle)) this.sound.play(jingle, { volume: 0.55 });
+
+    if (toy) {
+      const record = addLabel(
+        this,
+        cx,
+        224,
+        toy.record ? i18n.t('toy.result.record') : i18n.t('toy.result.best', { score: toy.best }),
+        toy.record ? 56 : 44,
+        toy.record ? ui.gold : ui.text,
+      ).setFontStyle('bold');
+      if (toy.record) {
+        this.tweens.add({
+          targets: record,
+          scale: { from: 0.6, to: 1.1 },
+          duration: 420,
+          ease: 'Back.easeOut',
+          yoyo: true,
+          hold: 200,
+          repeat: 1,
+        });
+      }
+    }
+
+    for (let star = 0; star < (toy ? 0 : 3); star += 1) {
       const earned = star < result.stars;
       const image = this.add
         .image(cx + (star - 1) * 130, 232 - (star === 1 ? 18 : 0), Tex.Star)
@@ -80,9 +112,13 @@ export class DayResultScene extends Phaser.Scene {
 
     const total = result.money + result.tips;
     this.add.image(cx - 160, 356, Tex.Coin).setScale(1.4);
-    addLabel(this, cx + 16, 356, i18n.t('result.total', { amount: total }), 52).setFontStyle(
-      'bold',
-    );
+    const totalLabel = addLabel(
+      this,
+      cx + 16,
+      356,
+      i18n.t('result.total', { amount: total }),
+      52,
+    ).setFontStyle('bold');
 
     const goalLine = result.goalMet ? i18n.t('result.goal.met') : i18n.t('result.goal.missed');
     const verdicts: (readonly [string, string])[] = [];
@@ -100,10 +136,18 @@ export class DayResultScene extends Phaser.Scene {
           : [i18n.t('result.blogger.bad'), ui.bad],
       );
     }
+    const header: (readonly [string, string])[] = toy
+      ? [[i18n.t('toy.result.time', { time: formatTime(toy.timeSec) }), ui.gold]]
+      : [
+          ...verdicts,
+          [goalText(i18n, level.goal), ui.muted],
+          [
+            passed ? goalLine : i18n.t('result.failed'),
+            passed && result.goalMet ? ui.good : ui.bad,
+          ],
+        ];
     const lines: readonly (readonly [string, string])[] = [
-      ...verdicts,
-      [goalText(i18n, level.goal), ui.muted],
-      [passed ? goalLine : i18n.t('result.failed'), passed && result.goalMet ? ui.good : ui.bad],
+      ...header,
       [i18n.t('result.revenue', { amount: result.money }), ui.text],
       [i18n.t('result.tips', { amount: result.tips }), ui.text],
       [i18n.t('result.served', { count: result.stats.served }), ui.good],
@@ -118,7 +162,7 @@ export class DayResultScene extends Phaser.Scene {
       ],
     ];
     lines.forEach(([text, color], index) => {
-      const label = addLabel(this, cx, 426 + index * 46, text, 29, color).setAlpha(0);
+      const label = addLabel(this, cx, 426 + index * 42, text, 28, color).setAlpha(0);
       label.setWordWrapWidth(660);
       this.tweens.add({ targets: label, alpha: 1, duration: 220, delay: 150 + index * 80 });
     });
@@ -130,19 +174,45 @@ export class DayResultScene extends Phaser.Scene {
     const toDay = (dayId: string): void =>
       this.leave(() => this.scene.start(SceneKey.Day, { dayId } satisfies DaySceneData));
 
-    let y = 900;
+    let y = 968;
+    if (campaign && total > 0) {
+      const double = Button.create(
+        this,
+        cx,
+        872,
+        i18n.t('result.double'),
+        () => {
+          if (this.busy) return;
+          this.busy = true;
+          void services()
+            .ads.showRewarded()
+            .then((rewarded) => {
+              this.busy = false;
+              if (!rewarded) return;
+              save.update((draft) => {
+                draft.money += Math.round(total);
+              });
+              double.setText(i18n.t('result.doubled', { amount: Math.round(total) }));
+              double.setEnabled(false);
+              totalLabel.setText(i18n.t('result.total', { amount: total * 2 }));
+              if (this.cache.audio.exists(Sfx.Coin)) this.sound.play(Sfx.Coin, { volume: 0.7 });
+            });
+        },
+        { color: ui.green, width: 560, height: 76, fontSize: 30 },
+      );
+    }
     if (canContinue && nextId) {
       Button.create(this, cx, y, i18n.t('result.next'), () => toDay(nextId), {
         color: ui.primary,
         height: 96,
       });
-      y += 108;
+      y += 104;
     }
     Button.create(this, cx, y, i18n.t('result.again'), () => toDay(result.dayId), {
       color: canContinue ? ui.secondary : ui.primary,
       height: 88,
     });
-    y += 104;
+    y += 100;
 
     if (!campaign) {
       Button.create(

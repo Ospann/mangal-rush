@@ -1,9 +1,17 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../keys';
+import { TOY_DAY_ID } from '../levels';
 import { services } from '../services';
 import { ui } from '../art/palette';
 import { Button } from '../ui/button';
 import { addLabel } from '../ui/text';
+
+export const REGISTRY_DAY = 'day';
+export const QUIT_EVENT = 'quit-day';
+
+function isToy(game: Phaser.Game): boolean {
+  return game.registry.get(REGISTRY_DAY) === TOY_DAY_ID;
+}
 
 export class PauseScene extends Phaser.Scene {
   constructor() {
@@ -30,7 +38,7 @@ export class PauseScene extends Phaser.Scene {
       this,
       width / 2,
       height * 0.66,
-      i18n.t('pause.quit'),
+      i18n.t(isToy(this.game) ? 'pause.finish' : 'pause.quit'),
       () => {
         quitDay(this.game);
       },
@@ -62,6 +70,11 @@ export function quitDay(game: Phaser.Game): void {
   const { mute, platform } = services();
   game.scene.stop(SceneKey.Pause);
   mute.set('pause', false);
+  if (isToy(game)) {
+    game.scene.resume(SceneKey.Day);
+    game.scene.getScene(SceneKey.Day).events.emit(QUIT_EVENT);
+    return;
+  }
   platform.levelFail();
   game.scene.stop(SceneKey.Day);
   game.scene.start(SceneKey.DaySelect);

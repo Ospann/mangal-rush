@@ -69,6 +69,11 @@ export class Coals {
     return true;
   }
 
+  refresh(): void {
+    this.level = 1;
+    this.smokeLeftSec = 0;
+  }
+
   fan(slot: number, amount: number): void {
     if (slot < 0 || slot >= this.slotCount || amount <= 0) return;
     const current = this.mods[slot] ?? 0;

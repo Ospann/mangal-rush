@@ -3,7 +3,7 @@ import { ui } from '../art/palette';
 import { balance } from '../balance';
 import { FONT_FAMILY, SceneKey, Tex } from '../keys';
 import { campaignLocations, dayRefs, daysOf } from '../levels';
-import type { LocationId } from '../locations';
+import { modsFor, type LocationId } from '../locations';
 import { dayStars, isDayUnlocked, isLocationUnlocked, locationStars } from '../progress';
 import { services } from '../services';
 import { Button } from '../ui/button';
@@ -17,9 +17,11 @@ export interface DaySelectData {
 }
 
 export const REGISTRY_LOCATION = 'location';
+export const REGISTRY_HELPER_PASS = 'helper-pass';
 
 export class DaySelectScene extends Phaser.Scene {
   private location: LocationId = 'roadside';
+  private busy = false;
 
   constructor() {
     super(SceneKey.DaySelect);
@@ -122,6 +124,31 @@ export class DaySelectScene extends Phaser.Scene {
         }
         addLabel(this, x, y + 42, goalText(i18n, day.goal), 19, ui.text).setAlpha(0.9);
       });
+    }
+
+    this.busy = false;
+    if (unlocked && !modsFor(this.location, progress.upgrades[this.location]).helper) {
+      const hired = this.registry.get(REGISTRY_HELPER_PASS) === true;
+      const helper = new Button(
+        this,
+        cx,
+        974,
+        i18n.t(hired ? 'select.helper.ready' : 'select.helper'),
+        () => {
+          if (this.busy) return;
+          this.busy = true;
+          void services()
+            .ads.showRewarded()
+            .then((rewarded) => {
+              this.busy = false;
+              if (!rewarded) return;
+              this.registry.set(REGISTRY_HELPER_PASS, true);
+              helper.setText(i18n.t('select.helper.ready')).setEnabled(false);
+            });
+        },
+        { color: ui.green, width: 560, height: 76, fontSize: 28 },
+      );
+      helper.setEnabled(!hired);
     }
 
     Button.create(

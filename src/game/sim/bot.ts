@@ -304,6 +304,23 @@ export function runDay(level: DayLevel, mods: DayMods, skill: BotSkill, seed: nu
   return { ...outcome, stats: { ...sim.stats } };
 }
 
+export interface ToyRun {
+  timeSec: number;
+  revenue: number;
+  served: number;
+}
+
+export function runToy(level: DayLevel, mods: DayMods, skill: BotSkill, seed: number): ToyRun {
+  const sim = new DaySim({ ...level, seed: level.seed + seed * 7919 }, mods, null, balance.toyMode);
+  const bot = new Bot(sim, createRng(seed * 104729 + 17), skill);
+  const step = balance.simStepSec;
+  while (!sim.finished && sim.timeSec < 3600) {
+    sim.step(step);
+    bot.update(step);
+  }
+  return { timeSec: sim.timeSec, revenue: sim.revenue, served: sim.stats.served };
+}
+
 export interface DayReport {
   id: string;
   runs: number;

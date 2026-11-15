@@ -4,13 +4,11 @@ const orientation: Orientation = 'portrait';
 const baseSize = { width: 720, height: 1280 };
 
 export const gameConfig = {
-  id: 'game-template',
+  id: 'mangal-rush',
   orientation,
   width: orientation === 'portrait' ? baseSize.width : baseSize.height,
   height: orientation === 'portrait' ? baseSize.height : baseSize.width,
-  backgroundColor: '#1d1f2b',
-  physics: 'none' as 'none' | 'arcade' | 'matter',
-  levelDurationSec: 20,
+  backgroundColor: '#2a1b14',
   ads: {
     interstitialCooldownSec: 60,
   },

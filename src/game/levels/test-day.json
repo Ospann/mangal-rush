@@ -1,0 +1,31 @@
+{
+  "id": "test",
+  "location": "roadside",
+  "durationSec": 150,
+  "seed": 20261115,
+  "grillSlots": 4,
+  "plates": 2,
+  "seats": 2,
+  "meats": ["chicken", "lamb"],
+  "start": {
+    "coalLevel": 0.8
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [5, 10],
+    "patienceSec": 75
+  },
+  "orders": [
+    { "weight": 3, "items": [{ "kind": "chicken", "count": 1 }] },
+    { "weight": 3, "items": [{ "kind": "chicken", "count": 2 }] },
+    { "weight": 3, "items": [{ "kind": "lamb", "count": 1 }] },
+    { "weight": 2, "items": [{ "kind": "lamb", "count": 2 }] },
+    {
+      "weight": 2,
+      "items": [
+        { "kind": "chicken", "count": 1 },
+        { "kind": "lamb", "count": 1 }
+      ]
+    }
+  ]
+}

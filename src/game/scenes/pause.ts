@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SceneKey } from '../keys';
 import { services } from '../services';
+import { ui } from '../art/palette';
 import { Button } from '../ui/button';
 import { addLabel } from '../ui/text';
 
@@ -15,17 +16,24 @@ export class PauseScene extends Phaser.Scene {
 
     this.add.rectangle(0, 0, width, height, 0x000000, 0.65).setOrigin(0).setInteractive();
     addLabel(this, width / 2, height * 0.4, i18n.t('pause.title'), 80);
-    Button.create(this, width / 2, height * 0.55, i18n.t('pause.resume'), () => {
-      resumeGame(this.game);
-    });
+    Button.create(
+      this,
+      width / 2,
+      height * 0.55,
+      i18n.t('pause.resume'),
+      () => {
+        resumeGame(this.game);
+      },
+      { color: ui.primary },
+    );
   }
 }
 
 export function pauseGame(game: Phaser.Game): void {
   const { scene } = game;
-  if (!scene.isActive(SceneKey.Game) || scene.isActive(SceneKey.Pause)) return;
+  if (!scene.isActive(SceneKey.Day) || scene.isActive(SceneKey.Pause)) return;
   const { gameplay, mute } = services();
-  scene.pause(SceneKey.Game);
+  scene.pause(SceneKey.Day);
   gameplay.stop();
   mute.set('pause', true);
   scene.run(SceneKey.Pause);
@@ -35,7 +43,7 @@ export function pauseGame(game: Phaser.Game): void {
 export function resumeGame(game: Phaser.Game): void {
   const { gameplay, mute } = services();
   game.scene.stop(SceneKey.Pause);
-  game.scene.resume(SceneKey.Game);
+  game.scene.resume(SceneKey.Day);
   mute.set('pause', false);
   gameplay.start();
 }

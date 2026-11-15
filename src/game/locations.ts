@@ -41,7 +41,7 @@ export const locations: Record<LocationId, LocationDef> = {
     index: 2,
     baseSlots: 5,
     basePlates: 2,
-    costMult: 1.6,
+    costMult: 1.2,
     upgrades: { grill: 1, coal: 2, fan: 1, sprayer: 2, plates: 1, decor: 2, marinade: 2 },
   },
   bazaar: {
@@ -49,7 +49,7 @@ export const locations: Record<LocationId, LocationDef> = {
     index: 3,
     baseSlots: 5,
     basePlates: 3,
-    costMult: 2.4,
+    costMult: 1.2,
     upgrades: {
       grill: 2,
       coal: 3,
@@ -66,7 +66,7 @@ export const locations: Record<LocationId, LocationDef> = {
     index: 4,
     baseSlots: 6,
     basePlates: 3,
-    costMult: 3.4,
+    costMult: 1.3,
     upgrades: {
       grill: 2,
       coal: 3,
@@ -85,7 +85,7 @@ export const locations: Record<LocationId, LocationDef> = {
     index: 5,
     baseSlots: 7,
     basePlates: 3,
-    costMult: 4.6,
+    costMult: 1.35,
     upgrades: {
       grill: 1,
       coal: 3,
@@ -148,6 +148,13 @@ export function baseMods(): DayMods {
     patienceMult: 1,
     tipMult: 1,
   };
+}
+
+export function withBuzz(mods: DayMods, buzz: number): DayMods {
+  const rules = balance.guestRules;
+  if (buzz > 0) return { ...mods, tipMult: mods.tipMult * rules.buzzTipMult };
+  if (buzz < 0) return { ...mods, patienceMult: mods.patienceMult * rules.buzzPatienceMult };
+  return mods;
 }
 
 export function modsFor(location: LocationId, levels: UpgradeLevels = {}): DayMods {

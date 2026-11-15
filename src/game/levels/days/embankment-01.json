@@ -1,0 +1,162 @@
+{
+  "id": "4-1",
+  "location": "embankment",
+  "day": 1,
+  "durationSec": 175,
+  "seed": 401,
+  "seats": 4,
+  "meats": ["chicken", "veg", "lamb", "lula", "fish"],
+  "sides": ["lavash", "onion", "tomato", "sauce"],
+  "drinks": ["kompot", "tea", "ayran"],
+  "start": {
+    "coalLevel": 0.8,
+    "ayran": 3
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [8.5, 12.5],
+    "patienceSec": 70,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.5
+      },
+      {
+        "type": "student",
+        "weight": 1.5
+      },
+      {
+        "type": "granny",
+        "weight": 1.5
+      },
+      {
+        "type": "blogger",
+        "weight": 1
+      },
+      {
+        "type": "athlete",
+        "weight": 1.2
+      },
+      {
+        "type": "office",
+        "weight": 5,
+        "fromSec": 105,
+        "untilSec": 175
+      }
+    ]
+  },
+  "goal": {
+    "type": "serve",
+    "value": 9
+  },
+  "stars": [780, 1220, 2040],
+  "events": [
+    {
+      "type": "rain",
+      "atSec": 44,
+      "durationSec": 25
+    }
+  ],
+  "orders": [
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ],
+      "sides": ["sauce"],
+      "drink": "tea"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lula",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["tomato", "sauce"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ],
+      "drink": "ayran"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        },
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        }
+      ],
+      "sides": ["onion", "tomato"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "lula",
+          "count": 1
+        }
+      ],
+      "sides": ["tomato"]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "fish",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

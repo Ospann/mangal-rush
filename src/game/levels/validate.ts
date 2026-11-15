@@ -3,15 +3,17 @@ import {
   drinkKinds,
   eventKinds,
   goalKinds,
+  guestKinds,
   sideKinds,
   type DrinkKind,
   type EventKind,
   type GoalKind,
+  type GuestKind,
   type MeatKind,
   type SideKind,
 } from '../balance';
 import { isLocationId, type LocationId } from '../locations';
-import type { DayEvent, DayGoal, DayLevel, OrderItem, OrderTemplate } from './types';
+import type { DayEvent, DayGoal, DayLevel, GuestSlot, OrderItem, OrderTemplate } from './types';
 
 export class LevelError extends Error {
   constructor(source: string, problems: string[]) {
@@ -44,6 +46,10 @@ function isGoalKind(value: unknown): value is GoalKind {
 
 function isEventKind(value: unknown): value is EventKind {
   return typeof value === 'string' && (eventKinds as readonly string[]).includes(value);
+}
+
+function isGuestKind(value: unknown): value is GuestKind {
+  return typeof value === 'string' && (guestKinds as readonly string[]).includes(value);
 }
 
 function parseList<T>(
@@ -197,7 +203,67 @@ function parseStars(check: Checker, raw: unknown): [number, number, number] {
   return [1, 2, 3];
 }
 
-function parseEvents(check: Checker, raw: unknown, durationSec: number): DayEvent[] {
+function parseGuestTypes(check: Checker, raw: unknown, durationSec: number): GuestSlot[] {
+  if (raw === undefined) return [{ type: 'local', weight: 1, fromSec: 0, untilSec: durationSec }];
+  if (!Array.isArray(raw) || raw.length === 0) {
+    check.fail('guests.types', 'expected a non-empty array');
+    return [];
+  }
+  const slots: GuestSlot[] = [];
+  raw.forEach((value, index) => {
+    const path = `guests.types[${index}]`;
+    if (!isRecord(value)) {
+      check.fail(path, 'expected an object');
+      return;
+    }
+    if (!isGuestKind(value.type)) {
+      check.fail(`${path}.type`, `unknown guest type ${JSON.stringify(value.type)}`);
+      return;
+    }
+    const fromSec = value.fromSec === undefined ? 0 : check.number(value, 'fromSec', `${path}.`, 0);
+    const untilSec =
+      value.untilSec === undefined
+        ? durationSec
+        : check.number(value, 'untilSec', `${path}.`, fromSec);
+    slots.push({
+      type: value.type,
+      weight: check.number(value, 'weight', `${path}.`, 0),
+      fromSec,
+      untilSec,
+    });
+  });
+  if (!slots.some((slot) => slot.weight > 0 && slot.fromSec <= 0)) {
+    check.fail('guests.types', 'at least one guest type must be available from the start');
+  }
+  return slots;
+}
+
+function parseBanquet(check: Checker, raw: unknown, path: string, meats: MeatKind[]): OrderItem[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    check.fail(`${path}.order`, 'a toy event needs a non-empty order');
+    return [];
+  }
+  const items: OrderItem[] = [];
+  raw.forEach((value, index) => {
+    const itemPath = `${path}.order[${index}]`;
+    if (!isRecord(value) || !isMeatKind(value.kind)) {
+      check.fail(itemPath, 'expected { kind, count } with a known meat');
+      return;
+    }
+    if (!meats.includes(value.kind)) {
+      check.fail(`${itemPath}.kind`, `"${value.kind}" is not listed in meats`);
+    }
+    items.push({ kind: value.kind, count: check.integer(value, 'count', `${itemPath}.`, 1, 20) });
+  });
+  return items;
+}
+
+function parseEvents(
+  check: Checker,
+  raw: unknown,
+  durationSec: number,
+  meats: MeatKind[],
+): DayEvent[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) {
     check.fail('events', 'expected an array');
@@ -220,7 +286,8 @@ function parseEvents(check: Checker, raw: unknown, durationSec: number): DayEven
     }
     const atSec = check.number(value, 'atSec', `${path}.`, 0, durationSec);
     const length = check.number(value, 'durationSec', `${path}.`, 1);
-    events.push({ type, atSec, durationSec: length });
+    const order = type === 'toy' ? parseBanquet(check, value.order, path, meats) : [];
+    events.push({ type, atSec, durationSec: length, order });
   });
   return events;
 }
@@ -295,10 +362,11 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
       firstDelaySec: check.number(guests, 'firstDelaySec', 'guests.', 0),
       intervalSec,
       patienceSec: check.number(guests, 'patienceSec', 'guests.', 1),
+      types: parseGuestTypes(check, guests.types, durationSec),
     },
     goal: parseGoal(check, raw.goal),
     stars: parseStars(check, raw.stars),
-    events: parseEvents(check, raw.events, durationSec),
+    events: parseEvents(check, raw.events, durationSec, meats),
     orders: check
       .array(raw, 'orders', '')
       .map((order, index) => parseOrder(check, order, `orders[${index}]`, menu)),

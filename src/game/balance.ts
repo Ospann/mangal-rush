@@ -21,8 +21,25 @@ export const upgradeIds = [
 ] as const;
 export type UpgradeId = (typeof upgradeIds)[number];
 
-export const eventKinds = ['wind', 'rain', 'rush'] as const;
+export const eventKinds = ['wind', 'rain', 'rush', 'toy'] as const;
 export type EventKind = (typeof eventKinds)[number];
+
+export const guestKinds = [
+  'local',
+  'taxi',
+  'granny',
+  'student',
+  'office',
+  'blogger',
+  'athlete',
+  'critic',
+] as const;
+export type GuestKind = (typeof guestKinds)[number];
+
+export interface GuestBalance {
+  patienceMult: number;
+  tipMult: number;
+}
 
 export const goalKinds = ['earn', 'serve', 'noBurn', 'combo'] as const;
 export type GoalKind = (typeof goalKinds)[number];
@@ -154,6 +171,32 @@ export const balance = {
   guests: {
     maxSeats: 4,
     leaveSec: 1.2,
+  },
+
+  guestTypes: {
+    local: { patienceMult: 1, tipMult: 1 },
+    taxi: { patienceMult: 0.62, tipMult: 1.6 },
+    granny: { patienceMult: 1.6, tipMult: 1 },
+    student: { patienceMult: 1, tipMult: 0.4 },
+    office: { patienceMult: 1.15, tipMult: 1.1 },
+    blogger: { patienceMult: 0.95, tipMult: 1 },
+    athlete: { patienceMult: 0.9, tipMult: 1.2 },
+    critic: { patienceMult: 1.1, tipMult: 1.3 },
+  } satisfies Record<GuestKind, GuestBalance>,
+
+  guestRules: {
+    grannyTipRate: 0.2,
+    studentFriendsAbove: 0.6,
+    studentFriends: [1, 2],
+    studentFriendDelaySec: 2.5,
+    officeSkewers: [3, 4],
+    regularChance: 0.75,
+    buzzTipMult: 1.15,
+    buzzPatienceMult: 0.9,
+  },
+
+  toy: {
+    bonusPerSkewer: 25,
   },
 
   events: {

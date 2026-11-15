@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { drinkTexture, miniTexture, sideTexture } from '../art/food-art';
-import { HEAD_Y, type Emotion } from '../art/guest-art';
-import { guestLooks } from '../art/palette';
+import { HEAD_Y, lookTexture, type Emotion } from '../art/guest-art';
 import { FONT_FAMILY, Tex } from '../keys';
 import type { Guest } from '../sim/day-sim';
 import { Depth } from './fx';
@@ -15,6 +14,8 @@ export class GuestView {
   private readonly body: Phaser.GameObjects.Container;
   private readonly face: Phaser.GameObjects.Image;
   private readonly bubble: Phaser.GameObjects.Container;
+  private readonly content: Phaser.GameObjects.Container;
+  private signature = '';
   private readonly bar: Phaser.GameObjects.Graphics;
   private emotion: Emotion = 'waiting';
   private clock = 0;
@@ -27,48 +28,23 @@ export class GuestView {
     readonly x: number,
   ) {
     this.guestId = guest.id;
-    const look = guest.look % guestLooks.length;
 
     this.body = scene.add.container(x, layout.guestY + this.offsetY).setDepth(Depth.Guests);
     this.face = new Phaser.GameObjects.Image(scene, 0, HEAD_Y + 8, `${Tex.Face}waiting`);
-    this.body.add([
-      new Phaser.GameObjects.Image(scene, 0, 0, `${Tex.GuestBody}${look}`),
-      this.face,
-    ]);
+    this.body.add([new Phaser.GameObjects.Image(scene, 0, 0, lookTexture(guest.look)), this.face]);
+    if (guest.regular) {
+      this.body.add(
+        new Phaser.GameObjects.Image(scene, -62, HEAD_Y - 40, Tex.Star)
+          .setScale(0.5)
+          .setTint(0xffd447),
+      );
+    }
     scene.tweens.add({ targets: this, offsetY: 0, duration: 380, ease: 'Back.easeOut' });
 
     this.bubble = scene.add.container(x, layout.bubbleY).setDepth(Depth.GuestUi).setScale(0);
-    this.bubble.add(new Phaser.GameObjects.Image(scene, 0, 0, Tex.Bubble));
-    const { items, sides, drink } = guest.order;
-    const extras = sides.length + (drink ? 1 : 0);
-    const rowY = extras > 0 ? -28 : -10;
-    const step = Math.min(78, 160 / items.length);
-    const scale = extras > 0 || items.length > 2 ? 0.66 : 0.95;
-    items.forEach((item, index) => {
-      const cx = (index - (items.length - 1) / 2) * step;
-      this.bubble.add(
-        new Phaser.GameObjects.Image(scene, cx - 15, rowY, miniTexture(item.kind)).setScale(scale),
-      );
-      this.bubble.add(
-        new Phaser.GameObjects.Text(scene, cx, rowY, `×${item.count}`, {
-          fontFamily: FONT_FAMILY,
-          fontSize: scale < 0.9 ? '27px' : '34px',
-          fontStyle: 'bold',
-          color: '#3a2418',
-        }).setOrigin(0, 0.5),
-      );
-    });
-    const extraStep = Math.min(36, 150 / Math.max(1, extras));
-    sides.forEach((side, index) => {
-      const cx = (index - (extras - 1) / 2) * extraStep;
-      this.bubble.add(new Phaser.GameObjects.Image(scene, cx, 17, sideTexture(side)).setScale(0.6));
-    });
-    if (drink) {
-      const cx = (extras - 1 - (extras - 1) / 2) * extraStep;
-      this.bubble.add(
-        new Phaser.GameObjects.Image(scene, cx, 15, drinkTexture(drink)).setScale(0.6),
-      );
-    }
+    this.content = new Phaser.GameObjects.Container(scene, 0, 0);
+    this.bubble.add([new Phaser.GameObjects.Image(scene, 0, 0, Tex.Bubble), this.content]);
+    this.fill(guest);
     scene.tweens.add({
       targets: this.bubble,
       scale: 1,
@@ -84,6 +60,7 @@ export class GuestView {
     this.clock += dtSec;
     const fraction = guest.patienceLeft / guest.patienceSec;
     if (guest.state === 'waiting') this.setEmotion(fraction < 0.35 ? 'hurry' : 'waiting');
+    this.fill(guest);
 
     const hurry = this.emotion === 'hurry';
     const bob = Math.sin(this.clock * (hurry ? 9 : 2.4)) * (hurry ? 3 : 4);
@@ -137,6 +114,52 @@ export class GuestView {
     this.body.destroy();
     this.bubble.destroy();
     this.bar.destroy();
+  }
+
+  private fill(guest: Guest): void {
+    const items = guest.order.items.filter((item) => item.count > 0);
+    const { sides, drink } = guest.order;
+    const signature = [
+      items.map((item) => `${item.kind}${item.count}`).join(','),
+      sides.join(','),
+      drink ?? '',
+    ].join('|');
+    if (signature === this.signature) return;
+    this.signature = signature;
+    this.content.removeAll(true);
+    if (items.length === 0) return;
+    const scene = this.scene;
+    const extras = sides.length + (drink ? 1 : 0);
+    const rowY = extras > 0 ? -28 : -10;
+    const step = Math.min(78, 160 / items.length);
+    const scale = extras > 0 || items.length > 2 ? 0.66 : 0.95;
+    items.forEach((item, index) => {
+      const cx = (index - (items.length - 1) / 2) * step;
+      this.content.add(
+        new Phaser.GameObjects.Image(scene, cx - 15, rowY, miniTexture(item.kind)).setScale(scale),
+      );
+      this.content.add(
+        new Phaser.GameObjects.Text(scene, cx, rowY, `×${item.count}`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: scale < 0.9 ? '27px' : '34px',
+          fontStyle: 'bold',
+          color: '#3a2418',
+        }).setOrigin(0, 0.5),
+      );
+    });
+    const extraStep = Math.min(36, 150 / Math.max(1, extras));
+    sides.forEach((side, index) => {
+      const cx = (index - (extras - 1) / 2) * extraStep;
+      this.content.add(
+        new Phaser.GameObjects.Image(scene, cx, 17, sideTexture(side)).setScale(0.6),
+      );
+    });
+    if (drink) {
+      const cx = (extras - 1 - (extras - 1) / 2) * extraStep;
+      this.content.add(
+        new Phaser.GameObjects.Image(scene, cx, 15, drinkTexture(drink)).setScale(0.6),
+      );
+    }
   }
 
   private setEmotion(emotion: Emotion): void {

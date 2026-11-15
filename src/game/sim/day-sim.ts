@@ -4,14 +4,23 @@ import {
   type Doneness,
   type DrinkKind,
   type EventKind,
+  type GuestKind,
   type MeatKind,
   type SideKind,
 } from '../balance';
 import type { DayLevel } from '../levels/types';
 import { baseMods, type DayMods } from '../locations';
+import { lineIndex, regularFor, type RegularVisits } from '../regulars';
 import { Grill } from './grill';
 import {
-  checkPlate,
+  banquetLeft,
+  banquetOf,
+  checkGuestPlate,
+  orderFor,
+  pickGuestKind,
+  type Banquet,
+} from './guests';
+import {
   clearPlate,
   emptyPlate,
   isPlateEmpty,
@@ -29,7 +38,12 @@ export type GuestState = 'waiting' | 'served' | 'angry';
 export interface Guest {
   id: number;
   seat: number;
-  look: number;
+  kind: GuestKind;
+  look: string;
+  regular: string | null;
+  line: number;
+  invited: boolean;
+  banquet: Banquet | null;
   order: Order;
   patienceSec: number;
   patienceLeft: number;
@@ -77,6 +91,9 @@ export type DayEvents = {
   tea: { state: TeaState };
   ayranRefill: { done: boolean };
   denied: { drink: DrinkKind | null };
+  banquetProgress: { guest: Guest; left: number };
+  banquetDone: { guest: Guest; bonus: number };
+  friendsComing: { guest: Guest; count: number };
   eventStart: { type: EventKind };
   eventEnd: { type: EventKind };
   taken: { slot: number; plate: number; quality: Doneness };
@@ -122,13 +139,21 @@ export class DaySim {
 
   readonly mods: DayMods;
   readonly slotCount: number;
+  readonly verdicts = { blogger: 0, critic: 0 };
   private readonly activeEvents = new Set<EventKind>();
+  private readonly pendingKinds: GuestKind[] = [];
+  private readonly pendingBanquets: Banquet[] = [];
+  private readonly startedEvents = new Set<number>();
+  private readonly visitedToday = new Set<string>();
+  private readonly regularVisits: RegularVisits | null;
 
   constructor(
     readonly level: DayLevel,
     mods: DayMods = baseMods(),
+    regularVisits: RegularVisits | null = null,
   ) {
     this.mods = mods;
+    this.regularVisits = regularVisits;
     this.slotCount = level.grillSlots ?? mods.grillSlots;
     this.rng = createRng(level.seed);
     this.grill = new Grill(
@@ -316,22 +341,58 @@ export class DaySim {
       }
     }
 
-    const reason = checkPlate(guest.order, plate);
+    const reason = checkGuestPlate(guest.kind, guest.order, guest.banquet, plate);
     if (reason) {
       this.events.emit('rejected', { guest, plate: plateIndex, reason });
       return false;
     }
 
-    const payment = payFor(plate, guest.patienceLeft / guest.patienceSec, this.combo);
+    const fraction = guest.patienceLeft / guest.patienceSec;
+    const flat = guest.kind === 'granny' ? balance.guestRules.grannyTipRate : null;
+    const payment = payFor(plate, fraction, this.combo, flat);
+    const overdone = plate.skewers.some((skewer) => qualityOf(skewer) === 'overdone');
     this.combo = payment.allPerfect ? this.combo + 1 : 0;
     this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
-    const tip = Math.round(payment.tip * this.mods.tipMult);
+    const tip = Math.round(
+      payment.tip * this.mods.tipMult * balance.guestTypes[guest.kind].tipMult,
+    );
     this.money += payment.price;
     this.tips += tip;
+
+    const banquet = guest.banquet;
+    if (banquet) {
+      for (const skewer of plate.skewers) {
+        const item = banquet.remaining.find((entry) => entry.kind === skewer.kind);
+        if (item) item.count -= 1;
+      }
+      clearPlate(plate);
+      const left = banquetLeft(banquet);
+      this.events.emit('served', {
+        guest,
+        plate: plateIndex,
+        price: payment.price,
+        tip,
+        combo: this.combo,
+      });
+      this.events.emit('banquetProgress', { guest, left });
+      if (left > 0) return true;
+      const bonus = banquet.total * balance.toy.bonusPerSkewer;
+      this.money += bonus;
+      this.stats.served += 1;
+      guest.state = 'served';
+      guest.leaveLeftSec = balance.guests.leaveSec;
+      this.events.emit('banquetDone', { guest, bonus });
+      this.events.emit('guestLeft', { guest });
+      return true;
+    }
+
     this.stats.served += 1;
     clearPlate(plate);
     guest.state = 'served';
     guest.leaveLeftSec = balance.guests.leaveSec;
+    if (guest.kind === 'blogger')
+      this.verdicts.blogger = payment.allPerfect ? 1 : overdone ? -1 : 0;
+    if (guest.kind === 'critic') this.verdicts.critic = payment.allPerfect ? 1 : overdone ? -1 : 0;
     this.events.emit('served', {
       guest,
       plate: plateIndex,
@@ -340,6 +401,17 @@ export class DaySim {
       combo: this.combo,
     });
     this.events.emit('guestLeft', { guest });
+
+    const rules = balance.guestRules;
+    if (guest.kind === 'student' && !guest.invited && fraction >= rules.studentFriendsAbove) {
+      const [min, max] = rules.studentFriends;
+      const count = this.isClosing ? 0 : this.rng.int(min, max);
+      for (let index = 0; index < count; index += 1) this.pendingKinds.push('student');
+      if (count > 0) {
+        this.nextArrivalSec = Math.min(this.nextArrivalSec, rules.studentFriendDelaySec);
+        this.events.emit('friendsComing', { guest, count });
+      }
+    }
     return true;
   }
 
@@ -469,6 +541,8 @@ export class DaySim {
           guest.leaveLeftSec = balance.guests.leaveSec;
           this.combo = 0;
           this.stats.lost += 1;
+          if (guest.kind === 'blogger') this.verdicts.blogger = -1;
+          if (guest.kind === 'critic') this.verdicts.critic = -1;
           this.events.emit('guestLeft', { guest });
         }
         return;
@@ -482,32 +556,84 @@ export class DaySim {
   }
 
   private tickArrivals(dtSec: number): void {
+    this.level.events.forEach((event, index) => {
+      if (event.type !== 'toy' || this.startedEvents.has(index) || this.timeSec < event.atSec)
+        return;
+      this.startedEvents.add(index);
+      this.pendingBanquets.push(banquetOf(event.order));
+    });
+
+    const seat = this.seats.indexOf(null);
+    const banquet = this.pendingBanquets[0];
+    if (banquet && seat !== -1) {
+      this.pendingBanquets.shift();
+      const event = this.level.events.find((entry) => entry.type === 'toy');
+      this.seat(seat, 'office', true, banquet, event?.durationSec ?? 60);
+      return;
+    }
+
     if (this.isClosing) return;
     this.nextArrivalSec -=
       dtSec / (this.isEventActive('rush') ? balance.events.rush.intervalMult : 1);
-    if (this.nextArrivalSec > 0) return;
-    const seat = this.seats.indexOf(null);
-    if (seat === -1) return;
+    if (this.nextArrivalSec > 0 || seat === -1) return;
 
-    const template = this.rng.pick(this.level.orders, (order) => order.weight);
+    const friend = this.pendingKinds.shift();
+    const kind = friend ?? pickGuestKind(this.level.guests.types, this.timeSec, this.rng);
+    this.seat(seat, kind, friend !== undefined, null, null);
+    const [min, max] = this.level.guests.intervalSec;
+    this.nextArrivalSec =
+      this.pendingKinds.length > 0
+        ? balance.guestRules.studentFriendDelaySec
+        : this.rng.range(min, max);
+  }
+
+  private seat(
+    seat: number,
+    kind: GuestKind,
+    invited: boolean,
+    banquet: Banquet | null,
+    patienceOverride: number | null,
+  ): void {
+    const order = banquet
+      ? { items: banquet.remaining, sides: [], drink: null }
+      : orderFor(kind, this.level, this.rng);
+    const patience =
+      patienceOverride ??
+      this.level.guests.patienceSec *
+        this.mods.patienceMult *
+        balance.guestTypes[kind].patienceMult;
+
+    let regular: string | null = null;
+    let line = 0;
+    const def = banquet || invited ? null : regularFor(kind);
+    if (
+      def &&
+      this.regularVisits &&
+      !this.visitedToday.has(def.id) &&
+      this.rng.next() < balance.guestRules.regularChance
+    ) {
+      this.visitedToday.add(def.id);
+      regular = def.id;
+      line = lineIndex(def, this.regularVisits[def.id] ?? 0);
+    }
+
     const guest: Guest = {
       id: this.nextGuestId,
       seat,
-      look: this.rng.int(0, 2),
-      order: {
-        items: template.items.map((item) => ({ ...item })),
-        sides: [...template.sides],
-        drink: template.drink,
-      },
-      patienceSec: this.level.guests.patienceSec * this.mods.patienceMult,
-      patienceLeft: this.level.guests.patienceSec * this.mods.patienceMult,
+      kind,
+      look: banquet ? 'toy' : kind === 'local' ? `local-${this.rng.int(0, 2)}` : kind,
+      regular,
+      line,
+      invited,
+      banquet,
+      order,
+      patienceSec: patience,
+      patienceLeft: patience,
       state: 'waiting',
       leaveLeftSec: 0,
     };
     this.nextGuestId += 1;
     this.seats[seat] = guest;
-    const [min, max] = this.level.guests.intervalSec;
-    this.nextArrivalSec = this.rng.range(min, max);
     this.events.emit('guestArrived', { guest });
   }
 }

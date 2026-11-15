@@ -17,7 +17,7 @@ export interface Plate {
   added: PlateItem[];
 }
 
-export type RejectReason = 'wrong' | 'raw' | 'burnt';
+export type RejectReason = 'wrong' | 'raw' | 'burnt' | 'overdone';
 
 export interface Payment {
   price: number;
@@ -68,7 +68,12 @@ export function comboMultiplier(combo: number): number {
   return Math.min(comboMax, 1 + comboStep * Math.max(0, combo));
 }
 
-export function payFor(plate: Plate, patienceFraction: number, combo: number): Payment {
+export function payFor(
+  plate: Plate,
+  patienceFraction: number,
+  combo: number,
+  flatTipRate: number | null = null,
+): Payment {
   const { quality, speedBonus } = balance.tips;
   let price = 0;
   let tip = 0;
@@ -77,8 +82,8 @@ export function payFor(plate: Plate, patienceFraction: number, combo: number): P
     const stage: Doneness = qualityOf(skewer);
     const cost = meatOf(skewer.kind).price;
     price += cost;
-    tip += cost * quality[stage];
-    if (stage !== 'perfect') allPerfect = false;
+    tip += cost * (flatTipRate ?? quality[stage]);
+    if (flatTipRate === null && stage !== 'perfect') allPerfect = false;
   }
   for (const side of plate.sides) price += balance.sides[side];
   if (plate.drink) price += balance.drinks[plate.drink];

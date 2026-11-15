@@ -1,4 +1,4 @@
-import type { DrinkKind, EventKind, GoalKind, MeatKind, SideKind } from '../balance';
+import type { DrinkKind, EventKind, GoalKind, GuestKind, MeatKind, SideKind } from '../balance';
 import type { LocationId } from '../locations';
 
 export interface OrderItem {
@@ -22,6 +22,14 @@ export interface DayEvent {
   type: EventKind;
   atSec: number;
   durationSec: number;
+  order: OrderItem[];
+}
+
+export interface GuestSlot {
+  type: GuestKind;
+  weight: number;
+  fromSec: number;
+  untilSec: number;
 }
 
 export interface DayLevel {
@@ -44,6 +52,7 @@ export interface DayLevel {
     firstDelaySec: number;
     intervalSec: [number, number];
     patienceSec: number;
+    types: GuestSlot[];
   };
   goal: DayGoal;
   stars: [number, number, number];

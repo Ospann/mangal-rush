@@ -28,6 +28,9 @@ export class Fx {
   private readonly sparks: Emitter;
   private readonly water: Emitter;
   private readonly fat: Emitter;
+  private readonly rain: Emitter;
+  private readonly gust: Emitter;
+  private readonly shade: Phaser.GameObjects.Rectangle;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.smoke = scene.add
@@ -103,6 +106,56 @@ export class Fx {
         tint: 0xffdf9a,
       })
       .setDepth(Depth.Particles);
+
+    const { width, height } = scene.scale;
+    this.shade = scene.add
+      .rectangle(0, 0, width, height, 0x1c3a66, 1)
+      .setOrigin(0)
+      .setAlpha(0)
+      .setDepth(Depth.Hint);
+
+    this.rain = scene.add
+      .particles(0, 0, Tex.Drop, {
+        emitting: false,
+        x: { min: 0, max: width + 120 },
+        y: -20,
+        lifespan: 1100,
+        speedY: { min: 1000, max: 1300 },
+        speedX: { min: -160, max: -90 },
+        scale: 0.8,
+        alpha: 0.5,
+        tint: 0xa8dcff,
+        quantity: 3,
+        frequency: 28,
+      })
+      .setDepth(Depth.Hint);
+
+    this.gust = scene.add
+      .particles(0, 0, Tex.Puff, {
+        emitting: false,
+        x: -40,
+        y: { min: 90, max: 1150 },
+        lifespan: 1300,
+        speedX: { min: 520, max: 820 },
+        scaleX: { start: 1.2, end: 2.6 },
+        scaleY: 0.25,
+        alpha: { start: 0.32, end: 0 },
+        tint: 0xffffff,
+        quantity: 1,
+        frequency: 70,
+      })
+      .setDepth(Depth.Hint);
+  }
+
+  setRain(on: boolean): void {
+    if (on) this.rain.start();
+    else this.rain.stop();
+    this.scene.tweens.add({ targets: this.shade, alpha: on ? 0.16 : 0, duration: 600 });
+  }
+
+  setWind(on: boolean): void {
+    if (on) this.gust.start();
+    else this.gust.stop();
   }
 
   puff(x: number, y: number, count = 1): void {

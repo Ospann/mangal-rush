@@ -15,12 +15,34 @@
   "guests": {
     "firstDelaySec": 3,
     "intervalSec": [7.2, 10.8],
-    "patienceSec": 69
+    "patienceSec": 69,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.5
+      },
+      {
+        "type": "student",
+        "weight": 2
+      },
+      {
+        "type": "granny",
+        "weight": 1.5
+      },
+      {
+        "type": "blogger",
+        "weight": 1
+      }
+    ]
   },
   "goal": {
     "type": "noBurn"
   },
-  "stars": [620, 970, 1530],
+  "stars": [630, 980, 1450],
   "events": [
     {
       "type": "wind",

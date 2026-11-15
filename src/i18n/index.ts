@@ -6,6 +6,10 @@ import tr from './tr.json';
 export type TranslationKey = keyof typeof en;
 export type Language = 'en' | 'ru' | 'tr';
 
+export function isTranslationKey(key: string): key is TranslationKey {
+  return Object.hasOwn(en, key);
+}
+
 export function createI18n(): I18n<typeof en, Language> {
   return new I18n<typeof en, Language>({
     dictionaries: { en, ru, tr },

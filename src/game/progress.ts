@@ -31,9 +31,11 @@ export function evaluateDay(
   thresholds: readonly [number, number, number],
   revenue: number,
   goalMet: boolean,
+  critic = 0,
 ): DayOutcome {
   const reached = thresholds.filter((threshold) => revenue >= threshold).length;
-  const stars = goalMet ? reached : Math.min(reached, balance.progress.goalStarCap);
+  const capped = goalMet ? reached : Math.min(reached, balance.progress.goalStarCap);
+  const stars = capped === 0 ? 0 : Math.min(3, Math.max(1, capped + Math.sign(critic)));
   return { revenue, goalMet, stars, passed: stars >= 1 };
 }
 

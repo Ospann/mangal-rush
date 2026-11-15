@@ -15,13 +15,39 @@
   "guests": {
     "firstDelaySec": 3,
     "intervalSec": [5.5, 8.5],
-    "patienceSec": 58
+    "patienceSec": 58,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.5
+      },
+      {
+        "type": "student",
+        "weight": 2
+      },
+      {
+        "type": "granny",
+        "weight": 1.5
+      },
+      {
+        "type": "blogger",
+        "weight": 1
+      },
+      {
+        "type": "athlete",
+        "weight": 1.5
+      }
+    ]
   },
   "goal": {
     "type": "serve",
-    "value": 10
+    "value": 9
   },
-  "stars": [510, 790, 1480],
+  "stars": [470, 730, 1350],
   "events": [
     {
       "type": "wind",

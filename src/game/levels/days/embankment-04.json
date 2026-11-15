@@ -1,0 +1,171 @@
+{
+  "id": "4-4",
+  "location": "embankment",
+  "day": 4,
+  "durationSec": 185,
+  "seed": 404,
+  "seats": 4,
+  "meats": ["chicken", "veg", "lamb", "lula", "fish"],
+  "sides": ["lavash", "onion", "tomato", "sauce"],
+  "drinks": ["kompot", "tea", "ayran"],
+  "start": {
+    "coalLevel": 0.8,
+    "ayran": 3
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [7.8, 11.5],
+    "patienceSec": 66,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.5
+      },
+      {
+        "type": "student",
+        "weight": 1.5
+      },
+      {
+        "type": "granny",
+        "weight": 1.5
+      },
+      {
+        "type": "blogger",
+        "weight": 1
+      },
+      {
+        "type": "athlete",
+        "weight": 1.2
+      },
+      {
+        "type": "office",
+        "weight": 5,
+        "fromSec": 111,
+        "untilSec": 185
+      }
+    ]
+  },
+  "goal": {
+    "type": "combo",
+    "value": 2
+  },
+  "stars": [780, 1210, 2320],
+  "events": [
+    {
+      "type": "rain",
+      "atSec": 46,
+      "durationSec": 30
+    },
+    {
+      "type": "rush",
+      "atSec": 111,
+      "durationSec": 30
+    }
+  ],
+  "orders": [
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 2
+        }
+      ],
+      "drink": "tea"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lula",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["onion", "tomato"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 1,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 3
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "ayran"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 2
+        }
+      ],
+      "sides": ["onion"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["onion", "sauce"],
+      "drink": "ayran"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "lamb",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash", "onion"],
+      "drink": "tea"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        },
+        {
+          "kind": "fish",
+          "count": 1
+        }
+      ],
+      "sides": ["onion", "tomato"]
+    },
+    {
+      "weight": 1,
+      "items": [
+        {
+          "kind": "fish",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ]
+    }
+  ]
+}

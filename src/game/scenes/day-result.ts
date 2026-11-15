@@ -18,6 +18,8 @@ export interface DayResultData {
   tips: number;
   stars: number;
   goalMet: boolean;
+  critic: number;
+  blogger: number;
   stats: DayStats;
 }
 
@@ -83,7 +85,23 @@ export class DayResultScene extends Phaser.Scene {
     );
 
     const goalLine = result.goalMet ? i18n.t('result.goal.met') : i18n.t('result.goal.missed');
+    const verdicts: (readonly [string, string])[] = [];
+    if (result.critic !== 0) {
+      verdicts.push(
+        result.critic > 0
+          ? [i18n.t('result.critic.good'), ui.good]
+          : [i18n.t('result.critic.bad'), ui.bad],
+      );
+    }
+    if (result.blogger !== 0 && campaign) {
+      verdicts.push(
+        result.blogger > 0
+          ? [i18n.t('result.blogger.good'), ui.good]
+          : [i18n.t('result.blogger.bad'), ui.bad],
+      );
+    }
     const lines: readonly (readonly [string, string])[] = [
+      ...verdicts,
       [goalText(i18n, level.goal), ui.muted],
       [passed ? goalLine : i18n.t('result.failed'), passed && result.goalMet ? ui.good : ui.bad],
       [i18n.t('result.revenue', { amount: result.money }), ui.text],
@@ -100,7 +118,7 @@ export class DayResultScene extends Phaser.Scene {
       ],
     ];
     lines.forEach(([text, color], index) => {
-      const label = addLabel(this, cx, 438 + index * 50, text, 32, color).setAlpha(0);
+      const label = addLabel(this, cx, 426 + index * 46, text, 29, color).setAlpha(0);
       label.setWordWrapWidth(660);
       this.tweens.add({ targets: label, alpha: 1, duration: 220, delay: 150 + index * 80 });
     });

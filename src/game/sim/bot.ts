@@ -3,7 +3,8 @@ import type { DayLevel } from '../levels/types';
 import type { DayMods } from '../locations';
 import { evaluateDay, type DayOutcome } from '../progress';
 import { DaySim, type DayStats, type Guest } from './day-sim';
-import { checkPlate, type Plate } from './orders';
+import { banquetNeeds, checkGuestPlate } from './guests';
+import type { Plate } from './orders';
 import { createRng, type Rng } from './rng';
 import { downSide, meatOf, qualityOf, upSide, type Skewer } from './skewer';
 
@@ -95,7 +96,16 @@ export class Bot {
 
   private missing(guest: Guest, plate: Plate): Map<MeatKind, number> {
     const need = new Map<MeatKind, number>();
-    for (const item of guest.order.items) need.set(item.kind, item.count);
+    if (guest.banquet) {
+      let room = balance.plate.capacity;
+      for (const item of guest.banquet.remaining) {
+        const count = Math.min(room, banquetNeeds(guest.banquet, item.kind));
+        need.set(item.kind, count);
+        room -= count;
+      }
+    } else {
+      for (const item of guest.order.items) need.set(item.kind, item.count);
+    }
     for (const skewer of plate.skewers) need.set(skewer.kind, (need.get(skewer.kind) ?? 0) - 1);
     return need;
   }
@@ -143,7 +153,10 @@ export class Bot {
       const surplus = [...this.missing(guest, plate).values()].some((count) => count < 0);
       const wrongSide = plate.sides.some((side) => !guest.order.sides.includes(side));
       const wrongDrink = plate.drink !== null && plate.drink !== guest.order.drink;
-      const spoiled = plate.skewers.some((skewer) => qualityOf(skewer) === 'burnt');
+      const spoiled = plate.skewers.some((skewer) => {
+        const quality = qualityOf(skewer);
+        return quality === 'burnt' || (guest.kind === 'athlete' && quality === 'overdone');
+      });
       if ((surplus || wrongSide || wrongDrink || spoiled) && this.sim.removeLast(index))
         return true;
     }
@@ -155,9 +168,18 @@ export class Bot {
       const index = this.plateOf.get(guest.id);
       const plate = index === undefined ? undefined : this.sim.plates[index];
       if (index === undefined || !plate) continue;
-      const helper = this.sim.mods.helper;
+      const helper = this.sim.mods.helper && !guest.banquet;
       const probe: Plate = helper ? { ...plate, sides: [...guest.order.sides] } : plate;
-      if (checkPlate(guest.order, probe) === null && this.sim.serve(index, guest.seat)) return true;
+      if (guest.banquet) {
+        const complete = [...this.missing(guest, plate).values()].every((count) => count <= 0);
+        if (!complete) continue;
+      }
+      if (
+        checkGuestPlate(guest.kind, guest.order, guest.banquet, probe) === null &&
+        this.sim.serve(index, guest.seat)
+      ) {
+        return true;
+      }
     }
     return false;
   }
@@ -230,6 +252,7 @@ export class Bot {
       const index = this.plateOf.get(guest.id);
       const plate = index === undefined ? undefined : this.sim.plates[index];
       if (index === undefined || !plate) continue;
+      if (guest.banquet) continue;
       const side = this.sim.mods.helper
         ? undefined
         : guest.order.sides.find((wanted) => !plate.sides.includes(wanted));
@@ -264,7 +287,7 @@ export interface DayRun extends DayOutcome {
 }
 
 export function runDay(level: DayLevel, mods: DayMods, skill: BotSkill, seed: number): DayRun {
-  const sim = new DaySim({ ...level, seed: level.seed + seed * 7919 }, mods);
+  const sim = new DaySim({ ...level, seed: level.seed + seed * 7919 }, mods, {});
   const bot = new Bot(sim, createRng(seed * 104729 + 17), skill);
   const step = balance.simStepSec;
   const limit = level.durationSec + 240;
@@ -272,7 +295,12 @@ export function runDay(level: DayLevel, mods: DayMods, skill: BotSkill, seed: nu
     sim.step(step);
     bot.update(step);
   }
-  const outcome = evaluateDay(level.stars, sim.revenue, sim.goalProgress().met);
+  const outcome = evaluateDay(
+    level.stars,
+    sim.revenue,
+    sim.goalProgress().met,
+    sim.verdicts.critic,
+  );
   return { ...outcome, stats: { ...sim.stats } };
 }
 

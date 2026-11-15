@@ -76,7 +76,8 @@ describe('unlocks', () => {
   it('chains campaign days in order', () => {
     expect(nextDayId('1-1')).toBe('1-2');
     expect(nextDayId('1-10')).toBe('2-1');
-    expect(nextDayId('2-10')).toBeNull();
+    expect(nextDayId('2-10')).toBe('3-1');
+    expect(nextDayId('5-10')).toBeNull();
   });
 });
 
@@ -125,7 +126,7 @@ describe('upgrade economy', () => {
   });
 
   it('prices a location within reach of its ten days', () => {
-    for (const location of ['roadside', 'lake'] as const) {
+    for (const location of locationIds) {
       const twoStarIncome = daysOf(location).reduce((sum, day) => sum + day.stars[1], 0);
       const total = totalUpgradeCost(location);
       expect(total).toBeGreaterThan(twoStarIncome * 0.4);
@@ -171,7 +172,10 @@ describe('upgrade effects in the simulation', () => {
   });
 
   it('wind raises flares and rain cools the coals unless there is a canopy', () => {
-    const windy = { ...level, events: [{ type: 'wind' as const, atSec: 0, durationSec: 999 }] };
+    const windy = {
+      ...level,
+      events: [{ type: 'wind' as const, atSec: 0, durationSec: 999, order: [] }],
+    };
     const flares = (events: typeof level): number => {
       let total = 0;
       for (let seed = 1; seed <= 6; seed += 1) {
@@ -187,7 +191,10 @@ describe('upgrade effects in the simulation', () => {
     };
     expect(flares(windy)).toBeGreaterThan(flares({ ...level, events: [] }));
 
-    const rainy = { ...level, events: [{ type: 'rain' as const, atSec: 0, durationSec: 999 }] };
+    const rainy = {
+      ...level,
+      events: [{ type: 'rain' as const, atSec: 0, durationSec: 999, order: [] }],
+    };
     const coalAfter = (canopy: boolean): number => {
       const sim = new DaySim(rainy, { ...modsFor('lake'), canopy });
       for (let t = 0; t < 20; t += 0.1) sim.step(0.1);
@@ -198,12 +205,22 @@ describe('upgrade effects in the simulation', () => {
 });
 
 describe('campaign', () => {
-  it('has ten valid days for each of the first two locations', () => {
+  it('has ten valid days for each of the five locations', () => {
     expect(daysOf('roadside').map((day) => day.day)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(daysOf('lake').map((day) => day.day)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     expect(daysOf('roadside').every((day) => !day.meats.includes('lamb'))).toBe(true);
     expect(daysOf('lake').every((day) => day.meats.includes('lamb'))).toBe(true);
-    expect(campaignDays).toHaveLength(20);
+    for (const location of locationIds) {
+      expect(daysOf(location)).toHaveLength(10);
+    }
+    expect(daysOf('bazaar').every((day) => day.meats.includes('lula'))).toBe(true);
+    expect(daysOf('embankment').every((day) => day.meats.includes('fish'))).toBe(true);
+    expect(daysOf('embankment').every((day) => day.events.some((e) => e.type === 'rain'))).toBe(
+      true,
+    );
+    expect(daysOf('restaurant').some((day) => day.events.some((e) => e.type === 'toy'))).toBe(true);
+    expect(daysOf('restaurant').at(-1)?.meats).toHaveLength(6);
+    expect(campaignDays).toHaveLength(50);
   });
 
   it('days 1-10 are passable for an average bot but not trivial', () => {
@@ -227,6 +244,8 @@ describe('save migration', () => {
       money: 0,
       stars: {},
       upgrades: {},
+      regulars: {},
+      buzz: 0,
       soundEnabled: false,
       language: 'ru',
     });
@@ -246,6 +265,8 @@ describe('save migration', () => {
       money: 500,
       stars: { '1-1': 3 },
       upgrades: { roadside: { grill: 1 } },
+      regulars: { taxi: 2 },
+      buzz: 1,
       soundEnabled: true,
       language: 'tr',
     };

@@ -1,0 +1,170 @@
+{
+  "id": "5-8",
+  "location": "restaurant",
+  "day": 8,
+  "durationSec": 205,
+  "seed": 508,
+  "seats": 4,
+  "meats": ["chicken", "veg", "lamb", "lula", "fish", "beef"],
+  "sides": ["lavash", "onion", "tomato", "sauce"],
+  "drinks": ["kompot", "tea", "ayran"],
+  "start": {
+    "coalLevel": 0.8,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [6.9, 10.2],
+    "patienceSec": 59,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.2
+      },
+      {
+        "type": "student",
+        "weight": 1.2
+      },
+      {
+        "type": "granny",
+        "weight": 1.2
+      },
+      {
+        "type": "blogger",
+        "weight": 1
+      },
+      {
+        "type": "athlete",
+        "weight": 1.2
+      },
+      {
+        "type": "office",
+        "weight": 2
+      },
+      {
+        "type": "critic",
+        "weight": 0.7
+      }
+    ]
+  },
+  "goal": {
+    "type": "combo",
+    "value": 2
+  },
+  "stars": [810, 1260, 2580],
+  "events": [
+    {
+      "type": "toy",
+      "atSec": 62,
+      "durationSec": 83,
+      "order": [
+        {
+          "kind": "lamb",
+          "count": 4
+        },
+        {
+          "kind": "lula",
+          "count": 3
+        },
+        {
+          "kind": "beef",
+          "count": 3
+        }
+      ]
+    }
+  ],
+  "orders": [
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        },
+        {
+          "kind": "lamb",
+          "count": 1
+        }
+      ],
+      "sides": ["onion", "tomato"]
+    },
+    {
+      "weight": 1,
+      "items": [
+        {
+          "kind": "fish",
+          "count": 3
+        }
+      ],
+      "sides": ["lavash", "sauce"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "beef",
+          "count": 1
+        }
+      ],
+      "sides": ["tomato"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "lula",
+          "count": 1
+        }
+      ],
+      "sides": ["tomato"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "tea"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["tomato", "sauce"],
+      "drink": "ayran"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "fish",
+          "count": 1
+        }
+      ],
+      "sides": ["sauce"]
+    }
+  ]
+}

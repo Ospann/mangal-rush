@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
+import { isTranslationKey } from '../../i18n';
 import { ui } from '../art/palette';
 import { SfxPlayer } from '../audio/sfx';
 import { balance, eventKinds, type MeatKind } from '../balance';
 import { devParams } from '../dev-params';
 import { FONT_FAMILY, SceneKey, Sfx, Tex } from '../keys';
 import { DEFAULT_DAY_ID, hasDay, loadDay } from '../levels';
-import { baseMods, modsFor } from '../locations';
+import { baseMods, modsFor, withBuzz } from '../locations';
 import { applyOutcome, evaluateDay } from '../progress';
+import { regulars } from '../regulars';
 import { DaySim } from '../sim/day-sim';
 import { services } from '../services';
 import { Button } from '../ui/button';
@@ -85,6 +87,8 @@ export class DayScene extends Phaser.Scene {
   private goalText!: Phaser.GameObjects.Text;
   private closingShown = false;
   private goalMet: boolean | null = null;
+  private buzz = 0;
+  private toastY = 0;
   private shownEvent = '';
   private shownGoal = '';
   private helpText: Phaser.GameObjects.Text | null = null;
@@ -105,9 +109,14 @@ export class DayScene extends Phaser.Scene {
     const { platform, gameplay } = services();
     const { save } = services();
     const level = loadDay(this.dayId);
-    const mods =
-      level.day > 0 ? modsFor(level.location, save.data.upgrades[level.location]) : baseMods();
-    this.sim = new DaySim(level, mods);
+    const campaign = level.day > 0;
+    this.buzz = campaign ? Math.sign(save.data.buzz) : 0;
+    const mods = campaign
+      ? withBuzz(modsFor(level.location, save.data.upgrades[level.location]), this.buzz)
+      : baseMods();
+    this.sim = new DaySim(level, mods, campaign ? { ...save.data.regulars } : null);
+    if (campaign && save.data.buzz !== 0) save.set('buzz', 0);
+    this.toastY = 0;
     this.registry.set(REGISTRY_LOCATION, level.location);
     this.shownEvent = '';
     this.shownGoal = '';
@@ -129,6 +138,12 @@ export class DayScene extends Phaser.Scene {
     platform.levelStart({ world: this.sim.level.location, level: this.sim.level.id });
     gameplay.start();
     this.showIntro();
+    if (this.buzz !== 0) {
+      const { i18n } = services();
+      this.time.delayedCall(2900, () =>
+        this.toast(i18n.t(this.buzz > 0 ? 'day.buzz.good' : 'day.buzz.bad')),
+      );
+    }
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.sfx.stop();
@@ -178,7 +193,8 @@ export class DayScene extends Phaser.Scene {
     this.hint = this.add.graphics().setDepth(Depth.Hint);
 
     this.helpText = null;
-    if (this.sim.level.day > 1) return;
+    const { day, location } = this.sim.level;
+    if (day > 1 || (day === 1 && location !== 'roadside')) return;
     this.helpText = addLabel(
       this,
       layout.width / 2,
@@ -191,6 +207,36 @@ export class DayScene extends Phaser.Scene {
       .setWordWrapWidth(560)
       .setStroke('#2a1b14', 8)
       .setLineSpacing(8);
+  }
+
+  private toast(text: string): void {
+    const label = addLabel(this, layout.width / 2, 0, text, 22, ui.text)
+      .setWordWrapWidth(680)
+      .setDepth(Depth.Float);
+    const height = label.height + 16;
+    const y = layout.counterY + 14 + height / 2 + this.toastY;
+    this.toastY += height + 4;
+    const panel = this.add
+      .rectangle(layout.width / 2, y, 704, height, ui.panel, 0.9)
+      .setStrokeStyle(2, 0xffd447, 0.7)
+      .setDepth(Depth.Float);
+    label.setY(y);
+    this.tweens.add({
+      targets: [panel, label],
+      alpha: { from: 0, to: 1 },
+      duration: 200,
+    });
+    this.tweens.add({
+      targets: [panel, label],
+      alpha: 0,
+      duration: 350,
+      delay: 4200,
+      onComplete: () => {
+        panel.destroy();
+        label.destroy();
+        this.toastY = Math.max(0, this.toastY - height - 4);
+      },
+    });
   }
 
   private showIntro(): void {
@@ -408,6 +454,50 @@ export class DayScene extends Phaser.Scene {
     events.on('guestArrived', ({ guest }) => {
       const view = new GuestView(this, guest, seatX(guest.seat, this.sim.level.seats));
       this.guestViews.set(guest.id, view);
+      const regular = regulars.find((entry) => entry.id === guest.regular);
+      if (!regular) return;
+      const key = `regular.${regular.id}.${guest.line}`;
+      if (!isTranslationKey(key)) return;
+      this.toast(`${i18n.t(`guest.${guest.kind}`)}: «${i18n.t(key)}»`);
+      services().save.update((draft) => {
+        draft.regulars = { ...draft.regulars, [regular.id]: (draft.regulars[regular.id] ?? 0) + 1 };
+      });
+    });
+
+    events.on('friendsComing', ({ guest, count }) => {
+      this.fx.floatText(
+        seatX(guest.seat, this.sim.level.seats),
+        layout.guestY + 40,
+        i18n.t('day.friends', { count }),
+        ui.good,
+        28,
+      );
+    });
+
+    events.on('banquetProgress', ({ guest, left }) => {
+      if (left <= 0) return;
+      this.fx.floatText(
+        seatX(guest.seat, this.sim.level.seats),
+        layout.guestY + 40,
+        i18n.t('toy.left', { count: left }),
+        ui.gold,
+        28,
+      );
+    });
+
+    events.on('banquetDone', ({ guest, bonus }) => {
+      const x = seatX(guest.seat, this.sim.level.seats);
+      this.sfx.play(Sfx.Bell, 0.8, 1.2);
+      this.fx.sparkle(x, layout.guestY, 10, 120);
+      this.fx.floatText(layout.width / 2, 300, i18n.t('toy.done', { amount: bonus }), ui.gold, 44);
+      for (let index = 0; index < 8; index += 1) {
+        this.fx.coin(x + index * 12 - 40, layout.guestY, 40, layout.hudH / 2, index * 60);
+      }
+    });
+
+    events.on('eventEnd', ({ type }) => {
+      if (type === 'rain') this.fx.setRain(false);
+      if (type === 'wind') this.fx.setWind(false);
     });
 
     events.on('served', ({ guest, price, tip, combo }) => {
@@ -464,6 +554,8 @@ export class DayScene extends Phaser.Scene {
     events.on('eventStart', ({ type }) => {
       this.sfx.play(type === 'rush' ? Sfx.Bell : Sfx.Fan, 0.8, 0.7);
       this.fx.floatText(layout.width / 2, 300, i18n.t(`event.${type}`), '#ffb347', 44);
+      if (type === 'rain') this.fx.setRain(true);
+      if (type === 'wind') this.fx.setWind(true);
     });
 
     events.on('finished', () => this.finish());
@@ -831,7 +923,8 @@ export class DayScene extends Phaser.Scene {
     this.cancelGestures();
     gameplay.stop();
 
-    const outcome = evaluateDay(level.stars, this.sim.revenue, this.sim.goalProgress().met);
+    const { critic, blogger } = this.sim.verdicts;
+    const outcome = evaluateDay(level.stars, this.sim.revenue, this.sim.goalProgress().met, critic);
     const info = { world: level.location, level: level.id };
     if (outcome.passed) platform.levelComplete(info);
     else platform.levelFail(info);
@@ -841,6 +934,7 @@ export class DayScene extends Phaser.Scene {
       save.update((draft) => {
         draft.money = next.money;
         draft.stars = next.stars;
+        draft.buzz = blogger;
       });
     }
 
@@ -850,6 +944,8 @@ export class DayScene extends Phaser.Scene {
       tips: this.sim.tips,
       stars: outcome.stars,
       goalMet: outcome.goalMet,
+      critic,
+      blogger,
       stats: { ...this.sim.stats },
     };
     this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, result));

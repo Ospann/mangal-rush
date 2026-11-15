@@ -15,7 +15,13 @@
   "guests": {
     "firstDelaySec": 3,
     "intervalSec": [10.0, 14.0],
-    "patienceSec": 80
+    "patienceSec": 80,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      }
+    ]
   },
   "goal": {
     "type": "serve",

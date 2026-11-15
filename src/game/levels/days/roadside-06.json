@@ -15,13 +15,27 @@
   "guests": {
     "firstDelaySec": 3,
     "intervalSec": [7.8, 11.2],
-    "patienceSec": 69
+    "patienceSec": 69,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      },
+      {
+        "type": "taxi",
+        "weight": 1.5
+      },
+      {
+        "type": "student",
+        "weight": 2
+      }
+    ]
   },
   "goal": {
     "type": "serve",
     "value": 10
   },
-  "stars": [510, 800, 1170],
+  "stars": [480, 750, 1060],
   "events": [],
   "orders": [
     {

@@ -15,13 +15,19 @@
   "guests": {
     "firstDelaySec": 3,
     "intervalSec": [9.6, 13.4],
-    "patienceSec": 78
+    "patienceSec": 78,
+    "types": [
+      {
+        "type": "local",
+        "weight": 4
+      }
+    ]
   },
   "goal": {
     "type": "earn",
-    "value": 520
+    "value": 510
   },
-  "stars": [330, 520, 700],
+  "stars": [330, 510, 720],
   "events": [],
   "orders": [
     {

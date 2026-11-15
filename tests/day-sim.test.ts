@@ -51,7 +51,12 @@ function level(overrides: Partial<DayLevel> = {}): DayLevel {
     goal: { type: 'serve', value: 3 },
     stars: [50, 100, 150],
     events: [],
-    guests: { firstDelaySec: 1, intervalSec: [2, 2], patienceSec: 10 },
+    guests: {
+      firstDelaySec: 1,
+      intervalSec: [2, 2],
+      patienceSec: 10,
+      types: [{ type: 'local', weight: 1, fromSec: 0, untilSec: 9999 }],
+    },
     orders: [{ weight: 1, items: [{ kind: 'chicken', count: 1 }], sides: [], drink: null }],
     ...overrides,
   };

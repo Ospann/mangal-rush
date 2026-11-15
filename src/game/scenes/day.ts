@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { ui } from '../art/palette';
 import { SfxPlayer } from '../audio/sfx';
-import { balance, type MeatKind } from '../balance';
+import { balance, eventKinds, type MeatKind } from '../balance';
 import { devParams } from '../dev-params';
 import { FONT_FAMILY, SceneKey, Sfx, Tex } from '../keys';
 import { DEFAULT_DAY_ID, hasDay, loadDay } from '../levels';
+import { baseMods, modsFor } from '../locations';
+import { applyOutcome, evaluateDay } from '../progress';
 import { DaySim } from '../sim/day-sim';
 import { services } from '../services';
 import { Button } from '../ui/button';
+import { goalShortText, goalText } from '../ui/goal-text';
 import { addLabel } from '../ui/text';
 import { Depth, Fx } from '../view/fx';
 import { GrillView } from '../view/grill-view';
@@ -30,6 +33,7 @@ import { PlateView } from '../view/plate-view';
 import { SkewerSprite } from '../view/skewer-sprite';
 import { StationsView } from '../view/stations-view';
 import type { DayResultData } from './day-result';
+import { REGISTRY_LOCATION } from './day-select';
 import { pauseGame } from './pause';
 
 export interface DaySceneData {
@@ -77,6 +81,12 @@ export class DayScene extends Phaser.Scene {
   private moneyText!: Phaser.GameObjects.Text;
   private timeText!: Phaser.GameObjects.Text;
   private comboText!: Phaser.GameObjects.Text;
+  private eventText!: Phaser.GameObjects.Text;
+  private goalText!: Phaser.GameObjects.Text;
+  private closingShown = false;
+  private goalMet: boolean | null = null;
+  private shownEvent = '';
+  private shownGoal = '';
   private helpText: Phaser.GameObjects.Text | null = null;
   private coalsButton!: Button;
   private coalsLabel = '';
@@ -93,7 +103,16 @@ export class DayScene extends Phaser.Scene {
 
   create(): void {
     const { platform, gameplay } = services();
-    this.sim = new DaySim(loadDay(this.dayId));
+    const { save } = services();
+    const level = loadDay(this.dayId);
+    const mods =
+      level.day > 0 ? modsFor(level.location, save.data.upgrades[level.location]) : baseMods();
+    this.sim = new DaySim(level, mods);
+    this.registry.set(REGISTRY_LOCATION, level.location);
+    this.shownEvent = '';
+    this.shownGoal = '';
+    this.closingShown = false;
+    this.goalMet = null;
     this.plateViews = [];
     this.guestViews = new Map();
     this.gestures = new Map();
@@ -109,6 +128,7 @@ export class DayScene extends Phaser.Scene {
     this.sfx.startSizzle();
     platform.levelStart({ world: this.sim.level.location, level: this.sim.level.id });
     gameplay.start();
+    this.showIntro();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.sfx.stop();
@@ -139,7 +159,6 @@ export class DayScene extends Phaser.Scene {
 
   private buildWorld(): void {
     const { i18n } = services();
-    const level = this.sim.level;
 
     this.add.image(0, 0, Tex.Background).setOrigin(0).setDepth(Depth.Background);
     this.add.image(0, layout.counterY, Tex.Counter).setOrigin(0).setDepth(Depth.Counter);
@@ -148,14 +167,18 @@ export class DayScene extends Phaser.Scene {
     this.sfx = new SfxPlayer(this);
     this.grillView = new GrillView(this, this.sim.grill, this.fx, devParams.debug);
 
-    const scale = plateScale(level.plates);
-    for (let index = 0; index < level.plates; index += 1) {
-      this.plateViews.push(new PlateView(this, plateX(index, level.plates), layout.plateY, scale));
+    const scale = plateScale(this.sim.plates.length);
+    for (let index = 0; index < this.sim.plates.length; index += 1) {
+      this.plateViews.push(
+        new PlateView(this, plateX(index, this.sim.plates.length), layout.plateY, scale),
+      );
     }
     this.stations = new StationsView(this, this.sim);
 
     this.hint = this.add.graphics().setDepth(Depth.Hint);
 
+    this.helpText = null;
+    if (this.sim.level.day > 1) return;
     this.helpText = addLabel(
       this,
       layout.width / 2,
@@ -168,6 +191,31 @@ export class DayScene extends Phaser.Scene {
       .setWordWrapWidth(560)
       .setStroke('#2a1b14', 8)
       .setLineSpacing(8);
+  }
+
+  private showIntro(): void {
+    const { i18n } = services();
+    const level = this.sim.level;
+    const title =
+      level.day > 0
+        ? `${i18n.t(`location.${level.location}`)} · ${i18n.t('select.day', { day: level.day })}`
+        : level.id;
+    const panel = this.add.container(layout.width / 2, 600).setDepth(Depth.Float);
+    panel.add([
+      this.add.rectangle(0, 0, 640, 170, ui.panel, 0.92).setStrokeStyle(4, 0xffd447, 0.9),
+      addLabel(this, 0, -34, title, 36, ui.gold).setFontStyle('bold'),
+      addLabel(this, 0, 28, goalText(i18n, level.goal), 30, ui.text).setWordWrapWidth(600),
+    ]);
+    panel.setScale(0.8).setAlpha(0);
+    this.tweens.add({ targets: panel, scale: 1, alpha: 1, duration: 220, ease: 'Back.easeOut' });
+    this.tweens.add({
+      targets: panel,
+      alpha: 0,
+      y: 560,
+      duration: 350,
+      delay: 2400,
+      onComplete: () => panel.destroy(),
+    });
   }
 
   private buildHud(): void {
@@ -187,6 +235,18 @@ export class DayScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setDepth(Depth.Hud);
     this.timeText = addLabel(this, layout.width / 2, layout.hudH / 2, '', 38)
+      .setFontStyle('bold')
+      .setDepth(Depth.Hud);
+    this.eventText = this.add
+      .text(190, layout.hudH / 2, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '24px',
+        fontStyle: 'bold',
+        color: '#ffb347',
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(Depth.Hud);
+    this.goalText = addLabel(this, 536, layout.hudH / 2, '', 24, ui.text)
       .setFontStyle('bold')
       .setDepth(Depth.Hud);
     this.comboText = addLabel(this, layout.width - 20, layout.hudH + 30, '', 32, ui.gold)
@@ -227,7 +287,7 @@ export class DayScene extends Phaser.Scene {
   private bindSim(): void {
     const { i18n } = services();
     const events = this.sim.events;
-    const slots = this.sim.level.grillSlots;
+    const slots = this.sim.slotCount;
     const meatMid = (layout.meatTop + layout.meatBottom) / 2;
 
     events.on('placed', () => {
@@ -401,6 +461,11 @@ export class DayScene extends Phaser.Scene {
       }
     });
 
+    events.on('eventStart', ({ type }) => {
+      this.sfx.play(type === 'rush' ? Sfx.Bell : Sfx.Fan, 0.8, 0.7);
+      this.fx.floatText(layout.width / 2, 300, i18n.t(`event.${type}`), '#ffb347', 44);
+    });
+
     events.on('finished', () => this.finish());
   }
 
@@ -423,8 +488,7 @@ export class DayScene extends Phaser.Scene {
   private onDown(pointer: Phaser.Input.Pointer): void {
     if (this.sim.finished || this.gestures.has(pointer.id)) return;
     const { x, y } = pointer;
-    const level = this.sim.level;
-    const slots = level.grillSlots;
+    const slots = this.sim.slotCount;
     const insideSlots = x >= layout.slotsLeft - 12 && x <= layout.slotsRight + 12;
 
     if (insideSlots && inMeatZone(y)) {
@@ -534,7 +598,7 @@ export class DayScene extends Phaser.Scene {
     gesture.lastX = x;
     gesture.moved += dx;
     if (dx <= 0 || !inGrill(y)) return;
-    const slots = this.sim.level.grillSlots;
+    const slots = this.sim.slotCount;
     this.sim.fan(slotAt(x, slots), (dx / slotWidth(slots)) * balance.fan.perSlotWidth);
   }
 
@@ -587,7 +651,7 @@ export class DayScene extends Phaser.Scene {
     }
 
     if (gesture.moved < layout.tapSlop && inMeatZone(gesture.startY)) {
-      this.sim.splash(slotAt(gesture.startX, this.sim.level.grillSlots));
+      this.sim.splash(slotAt(gesture.startX, this.sim.slotCount));
     }
   }
 
@@ -612,7 +676,7 @@ export class DayScene extends Phaser.Scene {
   }
 
   private freeSlotNear(x: number, keep: number | null): number | null {
-    const slots = this.sim.level.grillSlots;
+    const slots = this.sim.slotCount;
     let best: number | null = null;
     let bestDistance = slotWidth(slots) * 1.1;
     for (let slot = 0; slot < slots; slot += 1) {
@@ -675,7 +739,7 @@ export class DayScene extends Phaser.Scene {
     g.lineStyle(6, 0xfff06a, 0.9);
     g.fillStyle(0xfff06a, 0.16);
     if (target.kind === 'slot') {
-      const slots = this.sim.level.grillSlots;
+      const slots = this.sim.slotCount;
       const width = slotWidth(slots) - 14;
       const x = slotX(target.slot, slots) - width / 2;
       const height = layout.meatBottom - layout.meatTop + 24;
@@ -715,8 +779,29 @@ export class DayScene extends Phaser.Scene {
     }
 
     const closing = this.sim.isClosing;
-    this.timeText.setText(closing ? i18n.t('day.closing') : formatTime(this.sim.timeLeftSec));
+    this.timeText.setText(formatTime(this.sim.timeLeftSec));
     this.timeText.setColor(closing || this.sim.timeLeftSec < 15 ? ui.bad : ui.text);
+    if (closing && !this.closingShown) {
+      this.closingShown = true;
+      this.fx.floatText(layout.width / 2, 300, i18n.t('day.closing'), ui.bad, 44);
+    }
+
+    const active = eventKinds.filter((type) => this.sim.isEventActive(type));
+    const eventLabel = active.map((type) => i18n.t(`event.short.${type}`)).join(' · ');
+    if (eventLabel !== this.shownEvent) {
+      this.shownEvent = eventLabel;
+      this.eventText.setText(eventLabel);
+    }
+
+    const goal = this.sim.goalProgress();
+    const goalLabel = goalShortText(i18n, this.sim.level.goal, goal.value);
+    if (goalLabel !== this.shownGoal || this.goalMet !== goal.met) {
+      this.shownGoal = goalLabel;
+      this.goalMet = goal.met;
+      this.goalText.setText(goalLabel);
+      const failed = this.sim.level.goal.type === 'noBurn' && !goal.met;
+      this.goalText.setColor(failed ? ui.bad : goal.met ? ui.good : ui.text);
+    }
 
     this.comboText.setVisible(this.sim.combo >= 2);
     if (this.sim.combo >= 2) this.comboText.setText(i18n.t('day.combo', { count: this.sim.combo }));
@@ -741,15 +826,30 @@ export class DayScene extends Phaser.Scene {
   private finish(): void {
     if (this.leaving) return;
     this.leaving = true;
-    const { platform, gameplay, ads } = services();
+    const { platform, gameplay, ads, save } = services();
+    const level = this.sim.level;
     this.cancelGestures();
     gameplay.stop();
-    platform.levelComplete({ world: this.sim.level.location, level: this.sim.level.id });
+
+    const outcome = evaluateDay(level.stars, this.sim.revenue, this.sim.goalProgress().met);
+    const info = { world: level.location, level: level.id };
+    if (outcome.passed) platform.levelComplete(info);
+    else platform.levelFail(info);
     ads.markLevelCompleted();
+    if (level.day > 0) {
+      const next = applyOutcome(save.data, level.id, outcome);
+      save.update((draft) => {
+        draft.money = next.money;
+        draft.stars = next.stars;
+      });
+    }
+
     const result: DayResultData = {
       dayId: this.dayId,
       money: this.sim.money,
       tips: this.sim.tips,
+      stars: outcome.stars,
+      goalMet: outcome.goalMet,
       stats: { ...this.sim.stats },
     };
     this.time.delayedCall(700, () => this.scene.start(SceneKey.DayResult, result));

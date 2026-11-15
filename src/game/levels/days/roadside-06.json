@@ -1,0 +1,123 @@
+{
+  "id": "1-6",
+  "location": "roadside",
+  "day": 6,
+  "durationSec": 150,
+  "seed": 106,
+  "seats": 3,
+  "meats": ["chicken", "veg"],
+  "sides": ["lavash", "onion"],
+  "drinks": ["kompot"],
+  "start": {
+    "coalLevel": 0.85,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [7.8, 11.2],
+    "patienceSec": 69
+  },
+  "goal": {
+    "type": "serve",
+    "value": 10
+  },
+  "stars": [510, 800, 1170],
+  "events": [],
+  "orders": [
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash", "onion"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ],
+      "sides": ["lavash", "onion"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["onion"],
+      "drink": "kompot"
+    }
+  ]
+}

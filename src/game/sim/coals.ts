@@ -45,9 +45,11 @@ export class Coals {
     return clamp(base + (this.mods[slot] ?? 0), 0, balance.coals.maxSlotHeat);
   }
 
-  tick(dtSec: number): void {
+  tick(dtSec: number, decayMult = 1): void {
     const { decayPerSec, minLevel } = balance.coals;
-    if (this.level > minLevel) this.level = Math.max(minLevel, this.level - decayPerSec * dtSec);
+    if (this.level > minLevel) {
+      this.level = Math.max(minLevel, this.level - decayPerSec * decayMult * dtSec);
+    }
     this.cooldownSec = Math.max(0, this.cooldownSec - dtSec);
     this.smokeLeftSec = Math.max(0, this.smokeLeftSec - dtSec);
 
@@ -71,6 +73,12 @@ export class Coals {
     if (slot < 0 || slot >= this.slotCount || amount <= 0) return;
     const current = this.mods[slot] ?? 0;
     this.mods[slot] = Math.min(balance.fan.maxBoost, current + amount);
+  }
+
+  hold(slot: number, boost: number): void {
+    if (slot < 0 || slot >= this.slotCount) return;
+    const current = this.mods[slot] ?? 0;
+    if (current >= 0 && current < boost) this.mods[slot] = boost;
   }
 
   chill(slot: number): void {

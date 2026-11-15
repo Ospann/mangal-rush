@@ -16,16 +16,59 @@
     "patienceSec": 75
   },
   "orders": [
-    { "weight": 3, "items": [{ "kind": "chicken", "count": 1 }] },
-    { "weight": 3, "items": [{ "kind": "chicken", "count": 2 }] },
-    { "weight": 3, "items": [{ "kind": "lamb", "count": 1 }] },
-    { "weight": 2, "items": [{ "kind": "lamb", "count": 2 }] },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        }
+      ]
+    },
     {
       "weight": 2,
       "items": [
-        { "kind": "chicken", "count": 1 },
-        { "kind": "lamb", "count": 1 }
+        {
+          "kind": "lamb",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "lamb",
+          "count": 1
+        }
       ]
     }
-  ]
+  ],
+  "goal": {
+    "type": "serve",
+    "value": 6
+  },
+  "stars": [200, 350, 500]
 }

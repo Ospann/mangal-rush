@@ -7,6 +7,26 @@ export type SideKind = (typeof sideKinds)[number];
 export const drinkKinds = ['ayran', 'tea', 'kompot'] as const;
 export type DrinkKind = (typeof drinkKinds)[number];
 
+export const upgradeIds = [
+  'grill',
+  'coal',
+  'fan',
+  'sprayer',
+  'helper',
+  'plates',
+  'fridge',
+  'canopy',
+  'decor',
+  'marinade',
+] as const;
+export type UpgradeId = (typeof upgradeIds)[number];
+
+export const eventKinds = ['wind', 'rain', 'rush'] as const;
+export type EventKind = (typeof eventKinds)[number];
+
+export const goalKinds = ['earn', 'serve', 'noBurn', 'combo'] as const;
+export type GoalKind = (typeof goalKinds)[number];
+
 export type Doneness = 'raw' | 'done' | 'perfect' | 'overdone' | 'burnt';
 
 export interface MeatBalance {
@@ -134,6 +154,30 @@ export const balance = {
   guests: {
     maxSeats: 4,
     leaveSec: 1.2,
+  },
+
+  events: {
+    wind: { flareMult: 2.4 },
+    rain: { decayMult: 2.6 },
+    rush: { intervalMult: 0.5 },
+  },
+
+  upgrades: {
+    grill: { costs: [450, 900, 1500, 2300], slotsPerLevel: 1 },
+    coal: { costs: [250, 600, 1100], decayMult: [1, 0.8, 0.64, 0.5] },
+    fan: { costs: [500, 1200], boost: 0.25 },
+    sprayer: { costs: [600, 1400], delaySec: [0, 3, 1.4] },
+    helper: { costs: [900] },
+    plates: { costs: [400, 1000] },
+    fridge: { costs: [300, 700], stockPerLevel: 2 },
+    canopy: { costs: [800] },
+    decor: { costs: [200, 500, 950], patienceMult: [1, 1.1, 1.2, 1.3] },
+    marinade: { costs: [350, 800, 1400], tipMult: [1, 1.2, 1.4, 1.6] },
+  },
+
+  progress: {
+    starsToUnlockLocation: 16,
+    goalStarCap: 2,
   },
 
   tips: {

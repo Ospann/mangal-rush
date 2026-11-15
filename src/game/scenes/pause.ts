@@ -26,6 +26,16 @@ export class PauseScene extends Phaser.Scene {
       },
       { color: ui.primary },
     );
+    Button.create(
+      this,
+      width / 2,
+      height * 0.66,
+      i18n.t('pause.quit'),
+      () => {
+        quitDay(this.game);
+      },
+      { color: ui.secondary },
+    );
   }
 }
 
@@ -46,4 +56,13 @@ export function resumeGame(game: Phaser.Game): void {
   game.scene.resume(SceneKey.Day);
   mute.set('pause', false);
   gameplay.start();
+}
+
+export function quitDay(game: Phaser.Game): void {
+  const { mute, platform } = services();
+  game.scene.stop(SceneKey.Pause);
+  mute.set('pause', false);
+  platform.levelFail();
+  game.scene.stop(SceneKey.Day);
+  game.scene.start(SceneKey.DaySelect);
 }

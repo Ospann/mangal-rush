@@ -152,5 +152,10 @@
       ],
       "drink": "kompot"
     }
-  ]
+  ],
+  "goal": {
+    "type": "serve",
+    "value": 7
+  },
+  "stars": [400, 700, 1000]
 }

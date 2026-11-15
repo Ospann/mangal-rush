@@ -7,6 +7,7 @@ export interface ButtonOptions {
   color?: number;
   textColor?: string;
   fontSize?: number;
+  textOffsetY?: number;
 }
 
 export class Button extends Phaser.GameObjects.Container {
@@ -32,7 +33,7 @@ export class Button extends Phaser.GameObjects.Container {
 
     this.background = scene.add.graphics();
     this.label = scene.add
-      .text(0, 0, text, {
+      .text(0, options.textOffsetY ?? 0, text, {
         fontFamily: FONT_FAMILY,
         fontSize: `${options.fontSize ?? 44}px`,
         color: options.textColor ?? '#ffffff',

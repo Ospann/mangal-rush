@@ -1,22 +1,59 @@
+import { locationIds, locations, type LocationId } from '../locations';
+import type { DayRef } from '../progress';
 import testDay2 from './test-day-2.json';
 import testDay from './test-day.json';
 import type { DayLevel } from './types';
 import { parseDayLevel } from './validate';
 
-const sources: Readonly<Record<string, unknown>> = {
-  test: testDay,
-  'test-2': testDay2,
-};
+const campaign = import.meta.glob<unknown>('./days/*.json', { eager: true, import: 'default' });
 
-export const DEFAULT_DAY_ID = 'test-2';
+const levels = new Map<string, DayLevel>();
+for (const [path, raw] of Object.entries(campaign)) {
+  const level = parseDayLevel(raw, path);
+  if (levels.has(level.id)) throw new Error(`Duplicate day id "${level.id}" in ${path}`);
+  levels.set(level.id, level);
+}
+for (const [source, raw] of [
+  ['test-day.json', testDay],
+  ['test-day-2.json', testDay2],
+] as const) {
+  const level = parseDayLevel(raw, source);
+  levels.set(level.id, level);
+}
+
+export const campaignDays: readonly DayLevel[] = [...levels.values()]
+  .filter((level) => level.day > 0)
+  .toSorted((a, b) => locations[a.location].index - locations[b.location].index || a.day - b.day);
+
+export const dayRefs: readonly DayRef[] = campaignDays.map(({ id, location, day }) => ({
+  id,
+  location,
+  day,
+}));
+
+export const campaignLocations: readonly LocationId[] = locationIds.filter((location) =>
+  campaignDays.some((level) => level.location === location),
+);
+
+export const DEFAULT_DAY_ID = campaignDays[0]?.id ?? 'test-2';
 
 export function hasDay(id: string): boolean {
-  return Object.hasOwn(sources, id);
+  return levels.has(id);
 }
 
 export function loadDay(id: string): DayLevel {
-  if (!hasDay(id)) throw new Error(`Unknown day "${id}"`);
-  return parseDayLevel(sources[id], id);
+  const level = levels.get(id);
+  if (!level) throw new Error(`Unknown day "${id}"`);
+  return level;
 }
 
-export type { DayLevel, OrderItem, OrderTemplate } from './types';
+export function daysOf(location: LocationId): DayLevel[] {
+  return campaignDays.filter((level) => level.location === location);
+}
+
+export function nextDayId(id: string): string | null {
+  const index = campaignDays.findIndex((level) => level.id === id);
+  return index === -1 ? null : (campaignDays[index + 1]?.id ?? null);
+}
+
+export type { DayEvent, DayGoal, DayLevel, OrderItem, OrderTemplate } from './types';

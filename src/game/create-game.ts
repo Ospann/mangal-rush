@@ -3,9 +3,11 @@ import { gameConfig } from './config';
 import { BootScene } from './scenes/boot';
 import { DayScene } from './scenes/day';
 import { DayResultScene } from './scenes/day-result';
+import { DaySelectScene } from './scenes/day-select';
 import { MenuScene } from './scenes/menu';
 import { PauseScene } from './scenes/pause';
 import { PreloadScene } from './scenes/preload';
+import { UpgradesScene } from './scenes/upgrades';
 
 export function createGame(parent: HTMLElement): Phaser.Game {
   return new Phaser.Game({
@@ -26,6 +28,15 @@ export function createGame(parent: HTMLElement): Phaser.Game {
       antialias: true,
       roundPixels: false,
     },
-    scene: [BootScene, PreloadScene, MenuScene, DayScene, PauseScene, DayResultScene],
+    scene: [
+      BootScene,
+      PreloadScene,
+      MenuScene,
+      DaySelectScene,
+      UpgradesScene,
+      DayScene,
+      PauseScene,
+      DayResultScene,
+    ],
   });
 }

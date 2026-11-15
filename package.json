@@ -13,7 +13,8 @@
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "simulate": "vitest run --config vitest.sim.config.ts --disable-console-intercept"
   },
   "dependencies": {
     "@playgama/bridge": "2.4.2",

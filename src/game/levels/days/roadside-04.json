@@ -1,0 +1,115 @@
+{
+  "id": "1-4",
+  "location": "roadside",
+  "day": 4,
+  "durationSec": 135,
+  "seed": 104,
+  "seats": 2,
+  "meats": ["chicken", "veg"],
+  "sides": ["lavash"],
+  "drinks": [],
+  "start": {
+    "coalLevel": 0.85,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [8.7, 12.3],
+    "patienceSec": 73
+  },
+  "goal": {
+    "type": "noBurn"
+  },
+  "stars": [350, 540, 760],
+  "events": [],
+  "orders": [
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        },
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        },
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ]
+    }
+  ]
+}

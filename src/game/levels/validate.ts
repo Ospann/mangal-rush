@@ -1,12 +1,17 @@
 import {
   balance,
   drinkKinds,
+  eventKinds,
+  goalKinds,
   sideKinds,
   type DrinkKind,
+  type EventKind,
+  type GoalKind,
   type MeatKind,
   type SideKind,
 } from '../balance';
-import type { DayLevel, OrderItem, OrderTemplate } from './types';
+import { isLocationId, type LocationId } from '../locations';
+import type { DayEvent, DayGoal, DayLevel, OrderItem, OrderTemplate } from './types';
 
 export class LevelError extends Error {
   constructor(source: string, problems: string[]) {
@@ -31,6 +36,14 @@ function isSideKind(value: unknown): value is SideKind {
 
 function isDrinkKind(value: unknown): value is DrinkKind {
   return typeof value === 'string' && (drinkKinds as readonly string[]).includes(value);
+}
+
+function isGoalKind(value: unknown): value is GoalKind {
+  return typeof value === 'string' && (goalKinds as readonly string[]).includes(value);
+}
+
+function isEventKind(value: unknown): value is EventKind {
+  return typeof value === 'string' && (eventKinds as readonly string[]).includes(value);
 }
 
 function parseList<T>(
@@ -151,6 +164,78 @@ function parseOrder(check: Checker, raw: unknown, path: string, menu: Menu): Ord
   return { weight, items, sides, drink };
 }
 
+function parseGoal(check: Checker, raw: unknown): DayGoal {
+  if (!isRecord(raw)) {
+    check.fail('goal', 'expected an object');
+    return { type: 'serve', value: 1 };
+  }
+  const type = raw.type;
+  if (!isGoalKind(type)) {
+    check.fail('goal.type', `expected one of ${goalKinds.join(', ')}, got ${JSON.stringify(type)}`);
+    return { type: 'serve', value: 1 };
+  }
+  const value = type === 'noBurn' ? 0 : check.integer(raw, 'value', 'goal.', 1);
+  return { type, value };
+}
+
+function parseStars(check: Checker, raw: unknown): [number, number, number] {
+  const values: unknown[] = Array.isArray(raw) ? raw : [];
+  const [one, two, three] = values;
+  if (
+    values.length === 3 &&
+    typeof one === 'number' &&
+    typeof two === 'number' &&
+    typeof three === 'number' &&
+    one > 0 &&
+    one <= two &&
+    two <= three &&
+    Number.isFinite(three)
+  ) {
+    return [one, two, three];
+  }
+  check.fail('stars', 'expected three ascending positive revenue thresholds');
+  return [1, 2, 3];
+}
+
+function parseEvents(check: Checker, raw: unknown, durationSec: number): DayEvent[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    check.fail('events', 'expected an array');
+    return [];
+  }
+  const events: DayEvent[] = [];
+  raw.forEach((value, index) => {
+    const path = `events[${index}]`;
+    if (!isRecord(value)) {
+      check.fail(path, 'expected an object');
+      return;
+    }
+    const type = value.type;
+    if (!isEventKind(type)) {
+      check.fail(
+        `${path}.type`,
+        `expected one of ${eventKinds.join(', ')}, got ${JSON.stringify(type)}`,
+      );
+      return;
+    }
+    const atSec = check.number(value, 'atSec', `${path}.`, 0, durationSec);
+    const length = check.number(value, 'durationSec', `${path}.`, 1);
+    events.push({ type, atSec, durationSec: length });
+  });
+  return events;
+}
+
+function optionalInteger(
+  check: Checker,
+  source: Json,
+  key: string,
+  min: number,
+  max: number,
+): number | null {
+  if (source[key] === undefined || source[key] === null) return null;
+  return check.integer(source, key, '', min, max);
+}
+
 export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
   const check = new Checker();
   if (!isRecord(raw)) throw new LevelError(source, ['expected an object at the top level']);
@@ -182,13 +267,19 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
     check.fail('guests.intervalSec', 'expected [min, max] with 0 <= min <= max');
   }
 
+  let location: LocationId = 'roadside';
+  if (isLocationId(raw.location)) location = raw.location;
+  else check.fail('location', `unknown location ${JSON.stringify(raw.location)}`);
+  const durationSec = check.number(raw, 'durationSec', '', 10);
+
   const level: DayLevel = {
     id: check.string(raw, 'id', ''),
-    location: check.string(raw, 'location', ''),
-    durationSec: check.number(raw, 'durationSec', '', 10),
+    location,
+    day: raw.day === undefined ? 0 : check.integer(raw, 'day', '', 0, 99),
+    durationSec,
     seed: check.integer(raw, 'seed', '', 0),
-    grillSlots: check.integer(raw, 'grillSlots', '', 1, 8),
-    plates: check.integer(raw, 'plates', '', 1, 4),
+    grillSlots: optionalInteger(check, raw, 'grillSlots', 1, 8),
+    plates: optionalInteger(check, raw, 'plates', 1, 4),
     seats: check.integer(raw, 'seats', '', 1, balance.guests.maxSeats),
     meats,
     sides,
@@ -205,6 +296,9 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
       intervalSec,
       patienceSec: check.number(guests, 'patienceSec', 'guests.', 1),
     },
+    goal: parseGoal(check, raw.goal),
+    stars: parseStars(check, raw.stars),
+    events: parseEvents(check, raw.events, durationSec),
     orders: check
       .array(raw, 'orders', '')
       .map((order, index) => parseOrder(check, order, `orders[${index}]`, menu)),

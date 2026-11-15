@@ -1,0 +1,37 @@
+{
+  "id": "1-1",
+  "location": "roadside",
+  "day": 1,
+  "durationSec": 120,
+  "seed": 101,
+  "seats": 2,
+  "meats": ["chicken"],
+  "sides": [],
+  "drinks": [],
+  "start": {
+    "coalLevel": 0.85,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [10.0, 14.0],
+    "patienceSec": 80
+  },
+  "goal": {
+    "type": "serve",
+    "value": 7
+  },
+  "stars": [260, 400, 550],
+  "events": [],
+  "orders": [
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

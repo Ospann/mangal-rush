@@ -75,7 +75,28 @@ function drawSparkle(ctx: Ctx, size: number): void {
   ctx.fill();
 }
 
+function drawStar(ctx: Ctx, size: number): void {
+  const c = size / 2;
+  ctx.beginPath();
+  for (let point = 0; point < 10; point += 1) {
+    const radius = point % 2 === 0 ? c - 3 : (c - 3) * 0.46;
+    const angle = -Math.PI / 2 + (point * Math.PI) / 5;
+    const x = c + Math.cos(angle) * radius;
+    const y = c + 2 + Math.sin(angle) * radius;
+    if (point === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(90,60,20,0.55)';
+  ctx.stroke();
+}
+
 export function generateFxArt(scene: Phaser.Scene): void {
+  makeTexture(scene, Tex.Star, 64, 64, (ctx) => drawStar(ctx, 64));
   makeTexture(scene, Tex.Flame, 120, 180, drawFlame);
   makeTexture(scene, Tex.Puff, 64, 64, (ctx) =>
     drawSoft(ctx, 64, 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0)'),

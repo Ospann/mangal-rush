@@ -1,6 +1,14 @@
 import { Emitter } from '@core/events';
-import { balance, type Doneness, type DrinkKind, type MeatKind, type SideKind } from '../balance';
+import {
+  balance,
+  type Doneness,
+  type DrinkKind,
+  type EventKind,
+  type MeatKind,
+  type SideKind,
+} from '../balance';
 import type { DayLevel } from '../levels/types';
+import { baseMods, type DayMods } from '../locations';
 import { Grill } from './grill';
 import {
   checkPlate,
@@ -69,6 +77,8 @@ export type DayEvents = {
   tea: { state: TeaState };
   ayranRefill: { done: boolean };
   denied: { drink: DrinkKind | null };
+  eventStart: { type: EventKind };
+  eventEnd: { type: EventKind };
   taken: { slot: number; plate: number; quality: Doneness };
   trashed: { count: number };
   fanned: { slot: number };
@@ -110,15 +120,25 @@ export class DaySim {
   private nextArrivalSec: number;
   private nextGuestId = 1;
 
-  constructor(readonly level: DayLevel) {
+  readonly mods: DayMods;
+  readonly slotCount: number;
+  private readonly activeEvents = new Set<EventKind>();
+
+  constructor(
+    readonly level: DayLevel,
+    mods: DayMods = baseMods(),
+  ) {
+    this.mods = mods;
+    this.slotCount = level.grillSlots ?? mods.grillSlots;
     this.rng = createRng(level.seed);
     this.grill = new Grill(
-      level.grillSlots,
+      this.slotCount,
       createRng(level.seed ^ 0x9e3779b9),
       level.start.coalLevel,
     );
-    this.plates = Array.from({ length: level.plates }, () => emptyPlate());
-    this.fridge = { stock: level.start.ayran, capacity: level.start.ayran, refillLeftSec: 0 };
+    this.plates = Array.from({ length: level.plates ?? mods.plates }, () => emptyPlate());
+    const ayran = level.start.ayran + mods.fridgeBonus;
+    this.fridge = { stock: ayran, capacity: ayran, refillLeftSec: 0 };
     this.seats = Array.from({ length: level.seats }, () => null);
     this.nextArrivalSec = level.guests.firstDelaySec;
   }
@@ -288,6 +308,14 @@ export class DaySim {
     if (this.finished || !plate || !guest || guest.state !== 'waiting') return false;
     if (isPlateEmpty(plate)) return false;
 
+    if (this.mods.helper && plate.sides.every((side) => guest.order.sides.includes(side))) {
+      for (const side of guest.order.sides) {
+        if (plate.sides.includes(side)) continue;
+        plate.sides.push(side);
+        plate.added.push('side');
+      }
+    }
+
     const reason = checkPlate(guest.order, plate);
     if (reason) {
       this.events.emit('rejected', { guest, plate: plateIndex, reason });
@@ -297,8 +325,9 @@ export class DaySim {
     const payment = payFor(plate, guest.patienceLeft / guest.patienceSec, this.combo);
     this.combo = payment.allPerfect ? this.combo + 1 : 0;
     this.stats.bestCombo = Math.max(this.stats.bestCombo, this.combo);
+    const tip = Math.round(payment.tip * this.mods.tipMult);
     this.money += payment.price;
-    this.tips += payment.tip;
+    this.tips += tip;
     this.stats.served += 1;
     clearPlate(plate);
     guest.state = 'served';
@@ -307,7 +336,7 @@ export class DaySim {
       guest,
       plate: plateIndex,
       price: payment.price,
-      tip: payment.tip,
+      tip,
       combo: this.combo,
     });
     this.events.emit('guestLeft', { guest });
@@ -317,7 +346,16 @@ export class DaySim {
   private tick(dtSec: number): void {
     this.timeSec += dtSec;
 
-    for (const event of this.grill.tick(dtSec)) {
+    this.tickEvents();
+    const env = {
+      decayMult:
+        this.mods.coalDecayMult *
+        (this.isEventActive('rain') && !this.mods.canopy ? balance.events.rain.decayMult : 1),
+      flareMult: this.isEventActive('wind') ? balance.events.wind.flareMult : 1,
+    };
+    this.tickHelpers();
+
+    for (const event of this.grill.tick(dtSec, env)) {
       if (event.type === 'flare') {
         this.stats.flares += 1;
         this.events.emit('flare', { slot: event.slot });
@@ -341,6 +379,61 @@ export class DaySim {
       this.finished = true;
       this.events.emit('finished', undefined);
     }
+  }
+
+  get revenue(): number {
+    return this.money + this.tips;
+  }
+
+  isEventActive(type: EventKind): boolean {
+    return this.activeEvents.has(type);
+  }
+
+  goalProgress(): { value: number; target: number; met: boolean } {
+    const goal = this.level.goal;
+    if (goal.type === 'noBurn') {
+      return { value: this.stats.burntSkewers, target: 0, met: this.stats.burntSkewers === 0 };
+    }
+    const value =
+      goal.type === 'earn'
+        ? this.revenue
+        : goal.type === 'serve'
+          ? this.stats.served
+          : this.stats.bestCombo;
+    return { value, target: goal.value, met: value >= goal.value };
+  }
+
+  private tickEvents(): void {
+    const now = new Set<EventKind>();
+    for (const event of this.level.events) {
+      if (this.timeSec >= event.atSec && this.timeSec < event.atSec + event.durationSec) {
+        now.add(event.type);
+      }
+    }
+    for (const type of now) {
+      if (this.activeEvents.has(type)) continue;
+      this.activeEvents.add(type);
+      this.events.emit('eventStart', { type });
+    }
+    for (const type of this.activeEvents) {
+      if (now.has(type)) continue;
+      this.activeEvents.delete(type);
+      this.events.emit('eventEnd', { type });
+    }
+  }
+
+  private tickHelpers(): void {
+    const slots = this.grill.slots;
+    for (let index = 0; index < this.mods.autoFanSlots; index += 1) {
+      const slot = index % 2 === 0 ? index / 2 : slots.length - 1 - (index - 1) / 2;
+      const state = slots[slot];
+      if (state?.skewer && !state.lifted) this.grill.coals.hold(slot, balance.upgrades.fan.boost);
+    }
+    const delay = this.mods.sprayerDelaySec;
+    if (delay === null) return;
+    slots.forEach((state, slot) => {
+      if (state.flare && state.flareSec >= delay) this.splash(slot);
+    });
   }
 
   private tickStations(dtSec: number): void {
@@ -390,7 +483,8 @@ export class DaySim {
 
   private tickArrivals(dtSec: number): void {
     if (this.isClosing) return;
-    this.nextArrivalSec -= dtSec;
+    this.nextArrivalSec -=
+      dtSec / (this.isEventActive('rush') ? balance.events.rush.intervalMult : 1);
     if (this.nextArrivalSec > 0) return;
     const seat = this.seats.indexOf(null);
     if (seat === -1) return;
@@ -405,8 +499,8 @@ export class DaySim {
         sides: [...template.sides],
         drink: template.drink,
       },
-      patienceSec: this.level.guests.patienceSec,
-      patienceLeft: this.level.guests.patienceSec,
+      patienceSec: this.level.guests.patienceSec * this.mods.patienceMult,
+      patienceLeft: this.level.guests.patienceSec * this.mods.patienceMult,
       state: 'waiting',
       leaveLeftSec: 0,
     };

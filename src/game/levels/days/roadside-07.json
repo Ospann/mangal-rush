@@ -1,0 +1,126 @@
+{
+  "id": "1-7",
+  "location": "roadside",
+  "day": 7,
+  "durationSec": 155,
+  "seed": 107,
+  "seats": 3,
+  "meats": ["chicken", "veg"],
+  "sides": ["lavash", "onion"],
+  "drinks": ["kompot"],
+  "start": {
+    "coalLevel": 0.85,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [7.3, 10.7],
+    "patienceSec": 67
+  },
+  "goal": {
+    "type": "earn",
+    "value": 860
+  },
+  "stars": [550, 860, 1280],
+  "events": [
+    {
+      "type": "rush",
+      "atSec": 62,
+      "durationSec": 35
+    }
+  ],
+  "orders": [
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    },
+    {
+      "weight": 1,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 3
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        },
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash", "onion"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 2
+        }
+      ],
+      "sides": ["onion"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ],
+      "sides": ["onion"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ],
+      "drink": "kompot"
+    }
+  ]
+}

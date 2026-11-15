@@ -5,6 +5,8 @@ export const SceneKey = {
   Day: 'Day',
   Pause: 'Pause',
   DayResult: 'DayResult',
+  DaySelect: 'DaySelect',
+  Upgrades: 'Upgrades',
 } as const;
 
 export type SceneKey = (typeof SceneKey)[keyof typeof SceneKey];
@@ -30,6 +32,7 @@ export const Tex = {
   Bucket: 'bucket',
   Bubble: 'bubble',
   Coin: 'coin',
+  Star: 'star',
   GuestBody: 'guest-body-',
   Face: 'face-',
 } as const;

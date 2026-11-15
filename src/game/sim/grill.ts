@@ -17,8 +17,16 @@ export interface GrillSlot {
   skewer: Skewer | null;
   lifted: boolean;
   flare: boolean;
+  flareSec: number;
   flareEmptySec: number;
 }
+
+export interface GrillEnv {
+  decayMult: number;
+  flareMult: number;
+}
+
+const CALM: GrillEnv = { decayMult: 1, flareMult: 1 };
 
 export type GrillEvent =
   | { type: 'flare'; slot: number }
@@ -46,6 +54,7 @@ export class Grill {
       skewer: null,
       lifted: false,
       flare: false,
+      flareSec: 0,
       flareEmptySec: 0,
     }));
   }
@@ -111,19 +120,21 @@ export class Grill {
     const slot = this.slot(index);
     if (!slot?.flare) return false;
     slot.flare = false;
+    slot.flareSec = 0;
     slot.flareEmptySec = 0;
     this.coals.chill(index);
     return true;
   }
 
-  tick(dtSec: number): GrillEvent[] {
+  tick(dtSec: number, env: GrillEnv = CALM): GrillEvent[] {
     const events: GrillEvent[] = [];
-    this.coals.tick(dtSec);
+    this.coals.tick(dtSec, env.decayMult);
 
     this.slots.forEach((slot, index) => {
       const heat = this.coals.heat(index);
       const skewer = slot.skewer;
       const cooking = skewer !== null && !slot.lifted;
+      slot.flareSec = slot.flare ? slot.flareSec + dtSec : 0;
 
       if (slot.flare && !cooking) {
         slot.flareEmptySec += dtSec;
@@ -146,7 +157,7 @@ export class Grill {
       }
 
       if (!slot.flare && downSide(skewer) >= balance.flare.minCook) {
-        const chance = flareChancePerSec(heat, meatOf(skewer.kind).fat) * dtSec;
+        const chance = flareChancePerSec(heat, meatOf(skewer.kind).fat) * env.flareMult * dtSec;
         if (chance > 0 && this.rng.next() < chance) {
           slot.flare = true;
           events.push({ type: 'flare', slot: index });

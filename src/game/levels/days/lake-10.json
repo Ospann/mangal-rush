@@ -1,0 +1,136 @@
+{
+  "id": "2-10",
+  "location": "lake",
+  "day": 10,
+  "durationSec": 180,
+  "seed": 210,
+  "seats": 4,
+  "meats": ["chicken", "veg", "lamb"],
+  "sides": ["lavash", "onion", "tomato", "sauce"],
+  "drinks": ["kompot", "tea"],
+  "start": {
+    "coalLevel": 0.8,
+    "ayran": 4
+  },
+  "guests": {
+    "firstDelaySec": 3,
+    "intervalSec": [5.5, 8.5],
+    "patienceSec": 58
+  },
+  "goal": {
+    "type": "serve",
+    "value": 10
+  },
+  "stars": [510, 790, 1480],
+  "events": [
+    {
+      "type": "wind",
+      "atSec": 36,
+      "durationSec": 35
+    },
+    {
+      "type": "wind",
+      "atSec": 108,
+      "durationSec": 35
+    },
+    {
+      "type": "rush",
+      "atSec": 90,
+      "durationSec": 30
+    }
+  ],
+  "orders": [
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 2
+        }
+      ],
+      "sides": ["sauce"],
+      "drink": "tea"
+    },
+    {
+      "weight": 1,
+      "items": [
+        {
+          "kind": "chicken",
+          "count": 1
+        },
+        {
+          "kind": "lamb",
+          "count": 2
+        }
+      ],
+      "sides": ["tomato"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash", "tomato"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["onion"]
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "veg",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 3,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        }
+      ],
+      "sides": ["onion"]
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 2
+        }
+      ],
+      "sides": ["tomato"],
+      "drink": "kompot"
+    },
+    {
+      "weight": 2,
+      "items": [
+        {
+          "kind": "lamb",
+          "count": 1
+        },
+        {
+          "kind": "chicken",
+          "count": 1
+        }
+      ],
+      "sides": ["lavash"]
+    }
+  ]
+}

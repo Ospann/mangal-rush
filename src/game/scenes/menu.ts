@@ -2,13 +2,11 @@ import Phaser from 'phaser';
 import type { Language } from '../../i18n';
 import { ui } from '../art/palette';
 import { SceneKey, Tex } from '../keys';
-import { DEFAULT_DAY_ID } from '../levels';
 import { services } from '../services';
 import { Button } from '../ui/button';
 import { addLabel } from '../ui/text';
 import { layout } from '../view/layout';
 import { SkewerSprite } from '../view/skewer-sprite';
-import type { DaySceneData } from './day';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -50,7 +48,7 @@ export class MenuScene extends Phaser.Scene {
       height * 0.52,
       '',
       () => {
-        this.scene.start(SceneKey.Day, { dayId: DEFAULT_DAY_ID } satisfies DaySceneData);
+        this.scene.start(SceneKey.DaySelect);
       },
       { color: ui.primary },
     );

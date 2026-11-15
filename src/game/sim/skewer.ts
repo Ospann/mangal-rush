@@ -43,6 +43,15 @@ export function flipSkewer(skewer: Skewer): void {
   skewer.flips += 1;
 }
 
+export type FlipBreak = 'early' | 'flips';
+
+export function flipBreak(skewer: Skewer): FlipBreak | null {
+  const meat = meatOf(skewer.kind);
+  if (meat.minFlipCook !== undefined && downSide(skewer) < meat.minFlipCook) return 'early';
+  if (meat.maxFlips !== undefined && skewer.flips >= meat.maxFlips) return 'flips';
+  return null;
+}
+
 export function cookSkewer(skewer: Skewer, dtSec: number, heat: number, mult = 1): void {
   const meat = meatOf(skewer.kind);
   const gain = (dtSec * Math.max(0, heat) * mult) / meat.cookSec;

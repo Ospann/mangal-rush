@@ -5,6 +5,10 @@ type Stop = readonly [cook: number, color: number];
 const ramps: Record<MeatKind, readonly Stop[]> = {
   chicken: buildRamp('chicken', [0xf7c4b4, 0xf0c078, 0xe09a3c, 0xbd742c, 0x40281a, 0x1a1210]),
   lamb: buildRamp('lamb', [0xcf5560, 0xb06a40, 0x94502a, 0x73391b, 0x2e1a12, 0x140e0c]),
+  beef: buildRamp('beef', [0xb23a48, 0x96553a, 0x7a4226, 0x5a2c14, 0x2a1810, 0x120c0a]),
+  lula: buildRamp('lula', [0xdc8f86, 0xbd8050, 0xa06030, 0x78401e, 0x32201a, 0x16100e]),
+  veg: buildRamp('veg', [0xffffff, 0xf4e6c8, 0xe2c493, 0xb08a58, 0x45301f, 0x1c1410]),
+  fish: buildRamp('fish', [0xdfe8ee, 0xf2dca6, 0xe6ae52, 0xb47c30, 0x3c2a1a, 0x18120e]),
 };
 
 function buildRamp(kind: MeatKind, colors: readonly number[]): Stop[] {

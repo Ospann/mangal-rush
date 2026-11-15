@@ -1,4 +1,4 @@
-import type { MeatKind } from '../balance';
+import type { DrinkKind, MeatKind, SideKind } from '../balance';
 
 export interface OrderItem {
   kind: MeatKind;
@@ -8,6 +8,8 @@ export interface OrderItem {
 export interface OrderTemplate {
   weight: number;
   items: OrderItem[];
+  sides: SideKind[];
+  drink: DrinkKind | null;
 }
 
 export interface DayLevel {
@@ -19,8 +21,11 @@ export interface DayLevel {
   plates: number;
   seats: number;
   meats: MeatKind[];
+  sides: SideKind[];
+  drinks: DrinkKind[];
   start: {
     coalLevel: number;
+    ayran: number;
   };
   guests: {
     firstDelaySec: number;

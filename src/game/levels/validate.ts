@@ -1,4 +1,11 @@
-import { balance, type MeatKind } from '../balance';
+import {
+  balance,
+  drinkKinds,
+  sideKinds,
+  type DrinkKind,
+  type MeatKind,
+  type SideKind,
+} from '../balance';
 import type { DayLevel, OrderItem, OrderTemplate } from './types';
 
 export class LevelError extends Error {
@@ -16,6 +23,36 @@ function isRecord(value: unknown): value is Json {
 
 function isMeatKind(value: unknown): value is MeatKind {
   return typeof value === 'string' && Object.hasOwn(balance.meats, value);
+}
+
+function isSideKind(value: unknown): value is SideKind {
+  return typeof value === 'string' && (sideKinds as readonly string[]).includes(value);
+}
+
+function isDrinkKind(value: unknown): value is DrinkKind {
+  return typeof value === 'string' && (drinkKinds as readonly string[]).includes(value);
+}
+
+function parseList<T>(
+  check: Checker,
+  raw: unknown,
+  path: string,
+  guard: (value: unknown) => value is T,
+  label: string,
+): T[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    check.fail(path, 'expected an array');
+    return [];
+  }
+  const result: T[] = [];
+  raw.forEach((value, index) => {
+    if (!guard(value)) check.fail(`${path}[${index}]`, `unknown ${label} ${JSON.stringify(value)}`);
+    else if (result.includes(value))
+      check.fail(`${path}[${index}]`, `duplicate ${label} "${String(value)}"`);
+    else result.push(value);
+  });
+  return result;
 }
 
 class Checker {
@@ -63,10 +100,17 @@ class Checker {
   }
 }
 
-function parseOrder(check: Checker, raw: unknown, path: string, meats: MeatKind[]): OrderTemplate {
+interface Menu {
+  meats: MeatKind[];
+  sides: SideKind[];
+  drinks: DrinkKind[];
+}
+
+function parseOrder(check: Checker, raw: unknown, path: string, menu: Menu): OrderTemplate {
+  const { meats } = menu;
   if (!isRecord(raw)) {
     check.fail(path, 'expected an object');
-    return { weight: 0, items: [] };
+    return { weight: 0, items: [], sides: [], drink: null };
   }
   const weight = check.number(raw, 'weight', `${path}.`, 0);
   const items: OrderItem[] = [];
@@ -90,7 +134,21 @@ function parseOrder(check: Checker, raw: unknown, path: string, meats: MeatKind[
   if (total > balance.plate.capacity) {
     check.fail(path, `order has ${total} skewers, a plate holds ${balance.plate.capacity}`);
   }
-  return { weight, items };
+  const sides = parseList(check, raw.sides, `${path}.sides`, isSideKind, 'side');
+  for (const side of sides) {
+    if (!menu.sides.includes(side)) check.fail(`${path}.sides`, `"${side}" is not listed in sides`);
+  }
+  let drink: DrinkKind | null = null;
+  if (raw.drink !== undefined && raw.drink !== null) {
+    if (!isDrinkKind(raw.drink)) {
+      check.fail(`${path}.drink`, `unknown drink ${JSON.stringify(raw.drink)}`);
+    } else if (!menu.drinks.includes(raw.drink)) {
+      check.fail(`${path}.drink`, `"${raw.drink}" is not listed in drinks`);
+    } else {
+      drink = raw.drink;
+    }
+  }
+  return { weight, items, sides, drink };
 }
 
 export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
@@ -102,6 +160,10 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
     if (isMeatKind(value)) meats.push(value);
     else check.fail(`meats[${index}]`, `unknown meat ${JSON.stringify(value)}`);
   });
+
+  const sides = parseList(check, raw.sides, 'sides', isSideKind, 'side');
+  const drinks = parseList(check, raw.drinks, 'drinks', isDrinkKind, 'drink');
+  const menu: Menu = { meats, sides, drinks };
 
   const start = check.record(raw, 'start', '');
   const guests = check.record(raw, 'guests', '');
@@ -129,7 +191,15 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
     plates: check.integer(raw, 'plates', '', 1, 4),
     seats: check.integer(raw, 'seats', '', 1, balance.guests.maxSeats),
     meats,
-    start: { coalLevel: check.number(start, 'coalLevel', 'start.', 0, 1) },
+    sides,
+    drinks,
+    start: {
+      coalLevel: check.number(start, 'coalLevel', 'start.', 0, 1),
+      ayran:
+        start.ayran === undefined
+          ? balance.ayran.defaultStock
+          : check.integer(start, 'ayran', 'start.', 0, 99),
+    },
     guests: {
       firstDelaySec: check.number(guests, 'firstDelaySec', 'guests.', 0),
       intervalSec,
@@ -137,7 +207,7 @@ export function parseDayLevel(raw: unknown, source = 'level'): DayLevel {
     },
     orders: check
       .array(raw, 'orders', '')
-      .map((order, index) => parseOrder(check, order, `orders[${index}]`, meats)),
+      .map((order, index) => parseOrder(check, order, `orders[${index}]`, menu)),
   };
 
   if (level.orders.length > 0 && level.orders.every((order) => order.weight <= 0)) {

@@ -152,6 +152,25 @@ const trash: Render = (out, rate, rng) => {
   }
 };
 
+const pop: Render = (out, rate) => {
+  for (let index = 0; index < out.length; index += 1) {
+    const t = index / rate;
+    const frequency = 520 + 900 * Math.exp(-t * 40);
+    out[index] = Math.sin(TAU * frequency * t) * Math.exp(-t * 28) * 0.5 * Math.min(1, t * 600);
+  }
+};
+
+const pour: Render = (out, rate, rng) => {
+  let low = 0;
+  let phase = 0;
+  for (let index = 0; index < out.length; index += 1) {
+    const t = index / out.length;
+    low += (noise(rng) - low) * 0.18;
+    phase += (380 + 520 * t + 60 * Math.sin(t * 70)) / rate;
+    out[index] = (low * 0.6 + Math.sin(TAU * phase) * 0.25) * Math.sin(Math.PI * t) ** 0.8 * 0.8;
+  }
+};
+
 const specs: Record<SfxKey, SoundSpec> = {
   [Sfx.Sizzle]: { seconds: 2.4, render: sizzle },
   [Sfx.Flare]: { seconds: 0.7, render: flare },
@@ -179,6 +198,8 @@ const specs: Record<SfxKey, SoundSpec> = {
   [Sfx.Fan]: { seconds: 0.3, render: fan },
   [Sfx.Place]: { seconds: 0.12, render: place },
   [Sfx.Trash]: { seconds: 0.3, render: trash },
+  [Sfx.Pop]: { seconds: 0.14, render: pop },
+  [Sfx.Pour]: { seconds: 0.45, render: pour },
 };
 
 export function renderSounds(context: BaseAudioContext): Map<SfxKey, AudioBuffer> {

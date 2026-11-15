@@ -13,18 +13,21 @@ export const layout = {
   height,
   hudH: 64,
 
-  bubbleY: 132,
+  bubbleY: 130,
   guestY: 292,
   counterY: 392,
   counterH: 66,
   patienceY: 432,
 
-  plateY: 566,
-  plateSpacing: 220,
-  bowlY: 712,
-  bowlXs: [112, 300],
-  bucketX: 618,
-  bucketY: 706,
+  plateY: 532,
+  plateSpacing: 226,
+  stationY: 652,
+  stationW: 88,
+  stationLeft: 8,
+  trayY: 742,
+  trayMaxW: 116,
+  bucketX: 668,
+  bucketY: 650,
 
   grillX,
   grillTop,
@@ -43,7 +46,7 @@ export const layout = {
   tapSlop: 14,
   plateMagnet: 150,
   seatMagnet: 190,
-  bucketMagnet: 110,
+  bucketMagnet: 74,
 } as const;
 
 export function slotWidth(slots: number): number {
@@ -71,8 +74,21 @@ export function seatX(seat: number, seats: number): number {
   return (layout.width / seats) * (seat + 0.5);
 }
 
+export function plateScale(plates: number): number {
+  return Math.min(1, 700 / plates / 214);
+}
+
+export function stationX(index: number): number {
+  return layout.stationLeft + layout.stationW * (index + 0.5);
+}
+
+export function trayX(index: number, count: number): number {
+  const step = Math.min(layout.trayMaxW, 704 / count);
+  return layout.width / 2 + (index - (count - 1) / 2) * step;
+}
+
 export function plateX(plate: number, plates: number): number {
-  const spacing = Math.min(layout.plateSpacing, 660 / plates);
+  const spacing = Math.min(layout.plateSpacing, 700 / plates);
   return layout.width / 2 + (plate - (plates - 1) / 2) * spacing;
 }
 

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { bowlTexture } from '../art/food-art';
 import { ui } from '../art/palette';
 import { SfxPlayer } from '../audio/sfx';
 import { balance, type MeatKind } from '../balance';
@@ -18,6 +17,7 @@ import {
   inGrill,
   inMeatZone,
   layout,
+  plateScale,
   plateX,
   seatX,
   skewerScaleX,
@@ -28,6 +28,7 @@ import {
 } from '../view/layout';
 import { PlateView } from '../view/plate-view';
 import { SkewerSprite } from '../view/skewer-sprite';
+import { StationsView } from '../view/stations-view';
 import type { DayResultData } from './day-result';
 import { pauseGame } from './pause';
 
@@ -68,6 +69,7 @@ export class DayScene extends Phaser.Scene {
   private fx!: Fx;
   private sfx!: SfxPlayer;
   private grillView!: GrillView;
+  private stations!: StationsView;
   private plateViews: PlateView[] = [];
   private guestViews = new Map<number, GuestView>();
   private gestures = new Map<number, Gesture>();
@@ -121,7 +123,12 @@ export class DayScene extends Phaser.Scene {
     this.sim.step(dtSec * devParams.speed);
 
     this.grillView.update(dtSec);
-    this.sim.plates.forEach((plate, index) => this.plateViews[index]?.update(plate, dtSec));
+    this.sim.plates.forEach((plate, index) => {
+      const view = this.plateViews[index];
+      view?.update(plate, dtSec);
+      view?.setActive(index === this.sim.activePlate && this.sim.plates.length > 1);
+    });
+    this.stations.update(dtSec);
     for (const guest of this.sim.seats) {
       if (guest) this.guestViews.get(guest.id)?.update(guest, dtSec);
     }
@@ -141,18 +148,11 @@ export class DayScene extends Phaser.Scene {
     this.sfx = new SfxPlayer(this);
     this.grillView = new GrillView(this, this.sim.grill, this.fx, devParams.debug);
 
+    const scale = plateScale(level.plates);
     for (let index = 0; index < level.plates; index += 1) {
-      this.plateViews.push(new PlateView(this, plateX(index, level.plates), layout.plateY));
+      this.plateViews.push(new PlateView(this, plateX(index, level.plates), layout.plateY, scale));
     }
-
-    level.meats.forEach((meat, index) => {
-      const x = layout.bowlXs[index] ?? layout.bowlXs[0];
-      this.add.image(x, layout.bowlY, bowlTexture[meat]).setDepth(Depth.Props);
-      addLabel(this, x, layout.bowlY + 62, i18n.t(`meat.${meat}`), 20, ui.textDark)
-        .setDepth(Depth.Props)
-        .setFontStyle('bold');
-    });
-    this.add.image(layout.bucketX, layout.bucketY, Tex.Bucket).setDepth(Depth.Props);
+    this.stations = new StationsView(this, this.sim);
 
     this.hint = this.add.graphics().setDepth(Depth.Hint);
 
@@ -240,6 +240,54 @@ export class DayScene extends Phaser.Scene {
       const skewer = this.sim.grill.slot(slot)?.skewer;
       if (skewer) this.grillView.spriteFor(skewer.id)?.playFlip();
       this.fx.spark(slotX(slot, slots), meatMid + 40, 3);
+    });
+
+    events.on('broke', ({ slot }) => {
+      const x = slotX(slot, slots);
+      this.sfx.play(Sfx.Trash, 0.9, 0.8);
+      this.sfx.play(Sfx.Hm, 0.5, 1.1);
+      this.fx.soot(x, meatMid, 6);
+      this.fx.spark(x, layout.meatBottom - 30, 10);
+      this.fx.floatText(x, meatMid - 40, i18n.t('day.broke'), ui.bad, 32);
+      this.cameras.main.shake(100, 0.003);
+    });
+
+    events.on('sideAdded', ({ plate, side }) => {
+      this.sfx.play(Sfx.Pop, 0.7, Phaser.Math.FloatBetween(0.95, 1.1));
+      this.stations.bump(side);
+      this.plateViews[plate]?.bump();
+    });
+
+    events.on('drinkAdded', ({ plate, drink }) => {
+      this.sfx.play(Sfx.Pour, 0.7);
+      this.stations.bump(drink);
+      this.plateViews[plate]?.bump();
+    });
+
+    events.on('plateSelected', ({ plate }) => {
+      this.sfx.play(Sfx.Flip, 0.35, 1.3);
+      this.plateViews[plate]?.bump();
+    });
+
+    events.on('denied', () => {
+      this.sfx.play(Sfx.Hm, 0.4, 1.3, 200);
+      this.plateViews[this.sim.activePlate]?.bump();
+    });
+
+    events.on('tea', ({ state }) => {
+      const x = this.stations.xOf('tea');
+      if (state === 'brewing') this.sfx.play(Sfx.Pour, 0.5, 0.8);
+      else if (state === 'hot') this.sfx.play(Sfx.Perfect, 0.35, 0.8);
+      else if (state === 'cold') {
+        this.sfx.play(Sfx.Hm, 0.4, 1.2);
+        this.fx.floatText(x, layout.stationY - 50, i18n.t('day.tea.cold'), ui.bad, 26);
+      }
+    });
+
+    events.on('ayranRefill', ({ done }) => {
+      const x = this.stations.xOf('ayran');
+      if (done) this.sfx.play(Sfx.Pop, 0.7, 0.8);
+      else this.fx.floatText(x, layout.stationY - 50, i18n.t('day.ayran.out'), ui.muted, 26);
     });
 
     events.on('stage', ({ slot, stage }) => {
@@ -405,24 +453,33 @@ export class DayScene extends Phaser.Scene {
       return;
     }
 
-    for (const [index, meat] of level.meats.entries()) {
-      const bowlX = layout.bowlXs[index] ?? layout.bowlXs[0];
-      if (Math.abs(x - bowlX) > 84 || Math.abs(y - layout.bowlY) > 74) continue;
-      const ghost = new SkewerSprite(this, meat);
+    const station = this.stations.hit(x, y);
+    if (station?.kind === 'raw') {
+      const ghost = new SkewerSprite(this, station.meat);
       ghost
         .setScale(skewerScaleX(slots), skewerScaleY(slots))
         .setDepth(Depth.Dragged)
         .setPosition(x, y);
       ghost.held = true;
       this.sfx.play(Sfx.Flip, 0.4, 0.8);
-      this.gestures.set(pointer.id, { kind: 'raw', meat, ghost });
+      this.gestures.set(pointer.id, { kind: 'raw', meat: station.meat, ghost });
+      return;
+    }
+    if (station?.kind === 'side') {
+      this.sim.addSide(station.side);
+      return;
+    }
+    if (station?.kind === 'drink') {
+      this.sim.tapDrink(station.drink);
       return;
     }
 
     for (const [index, view] of this.plateViews.entries()) {
       const plate = this.sim.plates[index];
-      if (!plate || plate.skewers.length === 0 || view.held) continue;
-      if (Math.abs(x - view.homeX) > 108 || Math.abs(y - view.homeY) > 78) continue;
+      if (!plate || view.held) continue;
+      if (Math.abs(x - view.homeX) > view.halfWidth || Math.abs(y - view.homeY) > view.halfHeight) {
+        continue;
+      }
       this.gestures.set(pointer.id, {
         kind: 'plate',
         plate: index,
@@ -517,11 +574,15 @@ export class DayScene extends Phaser.Scene {
 
     if (gesture.kind === 'plate') {
       const view = this.plateViews[gesture.plate];
-      if (!gesture.dragging || !view) return;
+      if (!view) return;
+      if (!gesture.dragging) {
+        this.sim.selectPlate(gesture.plate);
+        return;
+      }
       view.setHeld(false);
       const target = this.plateTarget(x, y);
       if (target?.kind === 'seat') this.sim.serve(gesture.plate, target.seat);
-      else if (target?.kind === 'bucket') this.sim.trashPlate(gesture.plate);
+      else if (target?.kind === 'bucket') this.sim.removeLast(gesture.plate);
       return;
     }
 
@@ -623,15 +684,15 @@ export class DayScene extends Phaser.Scene {
     } else if (target.kind === 'plate') {
       const view = this.plateViews[target.plate];
       if (!view) return;
-      g.fillEllipse(view.homeX, view.homeY, 230, 168);
-      g.strokeEllipse(view.homeX, view.homeY, 230, 168);
+      g.fillEllipse(view.homeX, view.homeY, 230 * view.baseScale, 168 * view.baseScale);
+      g.strokeEllipse(view.homeX, view.homeY, 230 * view.baseScale, 168 * view.baseScale);
     } else if (target.kind === 'seat') {
       const x = seatX(target.seat, this.sim.level.seats);
       g.fillCircle(x, layout.guestY, 118);
       g.strokeCircle(x, layout.guestY, 118);
     } else {
-      g.fillCircle(layout.bucketX, layout.bucketY, 76);
-      g.strokeCircle(layout.bucketX, layout.bucketY, 76);
+      g.fillCircle(layout.bucketX, layout.bucketY, 54);
+      g.strokeCircle(layout.bucketX, layout.bucketY, 54);
     }
   }
 

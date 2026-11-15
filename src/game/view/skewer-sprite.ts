@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { MeatKind } from '../balance';
-import { chunkTexture, STICK_H } from '../art/food-art';
+import { chunkTextures, STICK_H } from '../art/food-art';
 import { Tex } from '../keys';
 import { downSide, upSide, type Skewer } from '../sim/skewer';
 import { meatColor } from './meat-color';
@@ -27,14 +27,16 @@ export class SkewerSprite extends Phaser.GameObjects.Container {
     const stick = new Phaser.GameObjects.Image(scene, 0, STICK_TOP, Tex.Stick).setOrigin(0.5, 0);
     this.inner.add(stick);
 
-    for (const offset of CHUNK_OFFSETS) {
-      const under = new Phaser.GameObjects.Image(scene, 0, offset + 7, chunkTexture[kind]);
+    const textures = chunkTextures(kind);
+    const texture = (index: number): string => textures[index] ?? textures[0] ?? '';
+    for (const [index, offset] of CHUNK_OFFSETS.entries()) {
+      const under = new Phaser.GameObjects.Image(scene, 0, offset + 7, texture(index));
       under.setScale(1.05);
       this.unders.push(under);
       this.inner.add(under);
     }
-    for (const offset of CHUNK_OFFSETS) {
-      const top = new Phaser.GameObjects.Image(scene, 0, offset, chunkTexture[kind]);
+    for (const [index, offset] of CHUNK_OFFSETS.entries()) {
+      const top = new Phaser.GameObjects.Image(scene, 0, offset, texture(index));
       this.tops.push(top);
       this.inner.add(top);
     }

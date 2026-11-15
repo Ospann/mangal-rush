@@ -5,9 +5,11 @@ import {
   cookSkewer,
   createSkewer,
   downSide,
+  flipBreak,
   flipSkewer,
   meatOf,
   sideStage,
+  type FlipBreak,
   type Skewer,
 } from './skewer';
 
@@ -66,11 +68,18 @@ export class Grill {
     return slot.skewer;
   }
 
-  flip(index: number): boolean {
-    const skewer = this.slot(index)?.skewer;
-    if (!skewer) return false;
+  flip(index: number): FlipBreak | 'flipped' | null {
+    const slot = this.slot(index);
+    const skewer = slot?.skewer;
+    if (!slot || !skewer) return null;
+    const broke = flipBreak(skewer);
+    if (broke) {
+      slot.skewer = null;
+      slot.lifted = false;
+      return broke;
+    }
     flipSkewer(skewer);
-    return true;
+    return 'flipped';
   }
 
   setLifted(index: number, lifted: boolean): void {

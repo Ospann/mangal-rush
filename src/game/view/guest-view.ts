@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { miniTexture } from '../art/food-art';
+import { drinkTexture, miniTexture, sideTexture } from '../art/food-art';
 import { HEAD_Y, type Emotion } from '../art/guest-art';
 import { guestLooks } from '../art/palette';
 import { FONT_FAMILY, Tex } from '../keys';
@@ -39,22 +39,36 @@ export class GuestView {
 
     this.bubble = scene.add.container(x, layout.bubbleY).setDepth(Depth.GuestUi).setScale(0);
     this.bubble.add(new Phaser.GameObjects.Image(scene, 0, 0, Tex.Bubble));
-    const items = guest.order.items;
-    const step = 78;
+    const { items, sides, drink } = guest.order;
+    const extras = sides.length + (drink ? 1 : 0);
+    const rowY = extras > 0 ? -28 : -10;
+    const step = Math.min(78, 160 / items.length);
+    const scale = extras > 0 || items.length > 2 ? 0.66 : 0.95;
     items.forEach((item, index) => {
       const cx = (index - (items.length - 1) / 2) * step;
       this.bubble.add(
-        new Phaser.GameObjects.Image(scene, cx - 16, -8, miniTexture[item.kind]).setScale(0.95),
+        new Phaser.GameObjects.Image(scene, cx - 15, rowY, miniTexture(item.kind)).setScale(scale),
       );
       this.bubble.add(
-        new Phaser.GameObjects.Text(scene, cx + 4, -8, `×${item.count}`, {
+        new Phaser.GameObjects.Text(scene, cx, rowY, `×${item.count}`, {
           fontFamily: FONT_FAMILY,
-          fontSize: '34px',
+          fontSize: scale < 0.9 ? '27px' : '34px',
           fontStyle: 'bold',
           color: '#3a2418',
         }).setOrigin(0, 0.5),
       );
     });
+    const extraStep = Math.min(36, 150 / Math.max(1, extras));
+    sides.forEach((side, index) => {
+      const cx = (index - (extras - 1) / 2) * extraStep;
+      this.bubble.add(new Phaser.GameObjects.Image(scene, cx, 17, sideTexture(side)).setScale(0.6));
+    });
+    if (drink) {
+      const cx = (extras - 1 - (extras - 1) / 2) * extraStep;
+      this.bubble.add(
+        new Phaser.GameObjects.Image(scene, cx, 15, drinkTexture(drink)).setScale(0.6),
+      );
+    }
     scene.tweens.add({
       targets: this.bubble,
       scale: 1,
